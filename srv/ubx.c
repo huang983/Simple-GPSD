@@ -5,7 +5,7 @@ static inline int init_ubx_header(UbxMsg *ubx_msg)
     ubx_msg->header[0] = UBX_SYNC1;
     ubx_msg->header[1] = UBX_SYNC2;
 
-    return GPSD_RET_SUCESS;
+    return GPSD_RET_SUCCESS;
 }
 
 static inline int calc_ubx_msg_size(UbxMsg *ubx_msg)
@@ -45,10 +45,10 @@ static void check_sum(UbxMsg *ubx_msg)
 
 /** 
  * @brief set the message rate of the given message class and ID
- * @param fd: file descriptor of the device
- * @param class: message's class
- * @param id: message's ID
- * @param rate: desired message rate (0: disable the message)
+ * @param fd file descriptor of the device
+ * @param class message's class
+ * @param id message's ID
+ * @param rate desired message rate (0: disable the message)
  * @return 0 on sucess
  */
 int ubx_set_msg_rate(int fd, uint8_t class, uint8_t id, uint8_t rate)
@@ -81,5 +81,5 @@ int ubx_set_msg_rate(int fd, uint8_t class, uint8_t id, uint8_t rate)
         printf("[%s] bytes written: %d (%s)\n", __FILE__, size, strerror(errno));
     }
 
-    return 0;
+    return GPSD_RET_SUCCESS;
 }
