@@ -5,14 +5,15 @@ CC := $(CROSS_COMPILE)gcc
 #  LDFLAGS = -lm
 
 SRCS = $(wildcard *.c)
+SRCS += $(wildcard ../socket/*.c)
 OBJS = $(SRCS:.c=.o)
 TARGET = gpsd
 override CFLAGS += -Wall
 
 all: $(TARGET)
 
-$(TARGET): $(OBJS)
-	$(CC) -o $@ $^ $(LDFLAGS) $(CFLAGS)
+$(TARGET):
+	$(CC) $(CFLAGS) $(SRCS) -o $@
 
 %.o: %.c
 	$(CC) -c $< $(CFLAGS)

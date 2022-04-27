@@ -1,9 +1,9 @@
 #include "gpsd.h" // libaries, print macros, and data structures
 #include "ubx.h" // UBX-related APIs
 #include "device.h" // device-related APIs
-#include "socket.h" // socket-related APIs
 
 GpsdData g_gpsd_data;
+GpsdBuf gpsd_buf;
 
 /* UBX protocols */
 uint8_t ubx_nav_time_gps[] = { 0xB5,0x62, 0x01,0x20, 0x00,0x00, 0x2C,0x83 };
@@ -31,6 +31,7 @@ int main(int argc, char **argv)
     GpsdData *gpsd = &g_gpsd_data;
     int size = 0;
     uint8_t *buf;
+    char *buf_ptr = NULL;
     int i = 0;
 
     if (argc < 2) {
@@ -40,6 +41,8 @@ int main(int argc, char **argv)
     
     /* Iniialize GPSD data */
     memset(gpsd, 0, sizeof(*gpsd));
+    memset(&gpsd_buf, 0, sizeof(gpsd_buf));
+    gpsd_buf.curr_type = GPSD_MSG_NUM;
 
     /* Initialize GPS device */
     strncpy(gpsd->dev_name, argv[1], sizeof(gpsd->dev_name));
@@ -47,46 +50,75 @@ int main(int argc, char **argv)
         exit(0);
     }
 
+#ifdef SCKT_ENABLE
     /* Set up Unix-domain socket connection */
-    if (socket_init(&gpsd->srv)) {
+    if (socket_server_init(&gpsd->srv)) {
         exit(0);
     }
 
-    GPSD_INFO("Socket set up is successful");
+    GPSD_INFO("Socket setup is successful");
+#endif
 
+
+    /* Stop the program by CTRL+C */
     signal(SIGINT, sig_handler);
 
     buf = calloc(RD_BUFSIZE, sizeof(*buf) * RD_BUFSIZE);
     if (buf == NULL) {
-        printf("[%s] Failed to allocate (err: %s)\n", __FILE__, strerror(errno));
+        GPSD_ERR("[%s] Failed to allocate (err: %s)\n", __FILE__, strerror(errno));
     }
 
     while (!gpsd->stop) {
-        // printf("Reading...\n");
+        if (gpsd_buf.nmea_idx == 512 && gpsd_buf.ubx_idx == 512) {
+            break;
+        }
+
         size = read(gpsd->fd, buf, RD_BUFSIZE);
-        // printf("Read success\n");
         buf[size] = '\0';
 
         if (size <= 0) {
-            printf("[%s] Cannot read fd %d (err: %s)\n", __FILE__, gpsd->fd, strerror(errno));
+            GPSD_ERR("[%s] Cannot read fd %d (err: %s)\n", __FILE__, gpsd->fd, strerror(errno));
         } else if (errno == EINTR) {
-            printf("[%s] Read operation was interrupted (err: %s)\n", __FILE__, strerror(errno));
+            GPSD_ERR("[%s] Read operation was interrupted (err: %s)\n", __FILE__, strerror(errno));
         }
 
         for (i = 0; i < size; i++) {
             if (buf[i] == 0xB5) {
-                printf("\nUBX message:\n");
+                GPSD_DBG("UBX message:");
+                gpsd_buf.curr_type = GPSD_MSG_UBX;
             } else if (buf[i] == '$') {
-                printf("\nNMEA message:\n");
+                GPSD_DBG("NMEA message:");
+                gpsd_buf.curr_type = GPSD_MSG_NMEA;
             }
-            
-            printf("0x%X ", buf[i]);
+
+            if ((gpsd_buf.curr_type == GPSD_MSG_NMEA && gpsd_buf.nmea_idx == 512) ||
+                    (gpsd_buf.curr_type == GPSD_MSG_UBX && gpsd_buf.ubx_idx == 512) ||
+                        gpsd_buf.curr_type == GPSD_MSG_NUM) {
+                continue;
+            }
+            GPSD_DBG("nmea: %d, ubx: %d", gpsd_buf.nmea_idx, gpsd_buf.ubx_idx);
+            buf_ptr = (gpsd_buf.curr_type == GPSD_MSG_NMEA) ?
+                        gpsd_buf.nmea + gpsd_buf.nmea_idx :
+                        gpsd_buf.ubx + gpsd_buf.ubx_idx;
+            memcpy(buf_ptr, &buf[i], 1);
+            if (gpsd_buf.curr_type == GPSD_MSG_UBX) {
+                gpsd_buf.ubx_idx++;
+            } else {
+                gpsd_buf.nmea_idx++;
+            }
         }
+
+        sleep(1); // sleep 1 second to simulate PPS interrupt
     }
+    
+    GPSD_INFO("%s", gpsd_buf.nmea);
     
     free(buf);
 
+#ifdef SCKT_ENABLE
     socket_server_close(&gpsd->srv);
+#endif
+
     device_close(gpsd);
 
     return 0;

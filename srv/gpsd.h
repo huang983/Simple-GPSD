@@ -15,6 +15,7 @@
 
 #include "../include/define.h"
 #include "../include/client.h"
+#include "../socket/socket.h" // socket-related APIs
 
 extern int errno;
 
@@ -45,6 +46,20 @@ extern int errno;
 #else
 #define GPSD_DBG(format, ...)
 #endif // GPSD_DEBUG
+
+typedef enum {
+    GPSD_MSG_UBX = 0,
+    GPSD_MSG_NMEA,
+    GPSD_MSG_NUM,
+} GpsdMsgType;
+
+typedef struct gpsd_buf {
+    char ubx[512];
+    char nmea[512];
+    int ubx_idx;
+    int nmea_idx;
+    GpsdMsgType curr_type;
+} GpsdBuf;
 
 typedef struct gpsd_data {
     int fd; // file descriptor
