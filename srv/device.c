@@ -60,6 +60,21 @@ int device_parse(DeviceInfo *gps_dev)
     while (i < gps_dev->size) {
         if (gps_dev->buf[i] == 0xB5) {
             /* UBX message */
+            if (gps_dev->buf[i + UBX_IDX_ClASS] == UBX_CLASS_NAV &&
+                gps_dev->buf[i + UBX_IDX_ID] == UBX_ID_NAV_TIMEGPS) {
+                /* Validate bits first
+                 * bit 0: TOW
+                 * bit 1: Week
+                 * bit 2: Leap sec */
+                if (gps_dev->buf[i + NAV_TIMEGPS_VALID_OFFSET] & 0x7) {
+                    gps_dev->iTOW = gps_dev->buf[i + NAV_TIMEGPS_iTOW_OFFSET];
+                    gps_dev->fTOW = gps_dev->buf[i + NAV_TIMEGPS_fTOW_OFFSET];
+                    gps_dev->week = gps_dev->buf[i + NAV_TIMEGPS_WEEK_OFFSET];
+                    gps_dev->leap_sec = gps_dev->buf[i + NAV_TIMEGPS_LEAP_OFFSET];
+                    gps_dev->valid = gps_dev->buf[i + NAV_TIMEGPS_VALID_OFFSET];
+                    gps_dev->tAcc = gps_dev->buf[i + NAV_TIMEGPS_tAcc_OFFSET];
+                }
+            }
         } else if (gps_dev->buf[i] == '$') {
             /* NMEA */
         }
