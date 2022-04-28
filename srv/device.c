@@ -101,7 +101,25 @@ int device_parse(DeviceInfo *gps_dev)
             }
         } else if (gps_dev->buf[i] == '$') {
             /* NMEA */
-            // DEV_DBG("Parsing NMEA message");
+            DEV_DBG("Parsing NMEA message");
+            if (strncmp((char *)&gps_dev->buf[i + 3], "GSA", 3) == 0) {
+                DEV_DBG("Talker ID: %.2s, Class: %.3s, Op mode: %c, Nav mode: %c", &gps_dev->buf[i + 1],
+                        &gps_dev->buf[i + 3], gps_dev->buf[i + 7], gps_dev->buf[i + 9]);
+                /* Get position fix mode */
+                switch (gps_dev->buf[i + NMEA_GSA_NAV_OFFSET]) {
+                    case '1':
+                        gps_dev->mode = NO_POS_FIX;
+                        break;
+                    case '2':
+                        gps_dev->mode = POS_2D_GNSS_FIX;
+                        break;
+                    case '3':
+                        gps_dev->mode = POS_3D_GNSS_FIX;
+                        break;
+                    default:
+                        gps_dev->mode = POS_FIX_NUM;
+                }
+            }
         }
 
         i++;

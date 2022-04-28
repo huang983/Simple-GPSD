@@ -28,9 +28,7 @@ static void check_sum(UbxMsg *ubx_msg)
     ck_sum_cnt = 4 + payload_length; // Class, ID, and length take up 4 bytes
     ck_a_offset = ck_sum_cnt;
     ck_b_offset = ck_sum_cnt + 1;
-    // printf("ck_sum_cnt: %d, ck_a: 0x%X, ck_b: 0x%X\n", ck_sum_cnt, ck_a, ck_b);
     for (i = 0; i < ck_sum_cnt; i++) {
-        // printf("[%d] ubx_msg val: 0x%X\n", i, *(ck_sum_ptr + i));
         ck_a += (uint8_t)*(ck_sum_ptr + i);
         ck_b += ck_a;
     }
@@ -38,7 +36,6 @@ static void check_sum(UbxMsg *ubx_msg)
     *(ck_sum_ptr + ck_a_offset) = ck_a;
     *(ck_sum_ptr + ck_b_offset) = ck_b;
     ubx_msg->size = calc_ubx_msg_size(ubx_msg);
-    // printf("[%s] ck_a: 0x%X, ck_b: 0x%X, size: %d\n", __func__, ck_a, ck_b, ubx_msg->size);
 
     return;
 }
@@ -73,8 +70,8 @@ int ubx_set_msg_rate(int fd, uint8_t class, uint8_t id, uint8_t rate)
     ubx_msg.payload_ck_sum[2] = rate;
 
     check_sum(&ubx_msg);
-    printf("ck_a: 0x%X, ck_b: 0x%X\n", ubx_msg.payload_ck_sum[ubx_msg.size - 6 - 2],
-                ubx_msg.payload_ck_sum[ubx_msg.size - 6 - 1]);
+    // printf("ck_a: 0x%X, ck_b: 0x%X\n", ubx_msg.payload_ck_sum[ubx_msg.size - 6 - 2],
+    //             ubx_msg.payload_ck_sum[ubx_msg.size - 6 - 1]);
 
     size = write(fd, &ubx_msg, ubx_msg.size);
     if (size < ubx_msg.size) {
