@@ -36,6 +36,7 @@ int device_init(DeviceInfo *gps_dev)
 int device_read(DeviceInfo *gps_dev)
 {
     /* TODO: wait for PPS interrupt first */
+    // sleep(1);
 
     /* Read from device */
     if ((gps_dev->size = read(gps_dev->fd, gps_dev->buf, DEV_RD_BUF_SIZE))
@@ -44,6 +45,9 @@ int device_read(DeviceInfo *gps_dev)
         return -1;
     }
     
+    // DEV_DBG("size: %d", gps_dev->size);
+    // DEV_DBG("Message: %s", gps_dev->buf);
+
     return 0;
 }
 
@@ -57,9 +61,14 @@ int device_parse(DeviceInfo *gps_dev)
 {
     int i = 0;
 
+    if (gps_dev->size <= 0) {
+        DEV_ERR("Size is 0. Nothing to parse!");
+    }
+
     while (i < gps_dev->size) {
         if (gps_dev->buf[i] == 0xB5) {
             /* UBX message */
+            DEV_DBG("Parsing UBX message");
             if ((i + NAV_TIMEGPS_tAcc_OFFSET) >= gps_dev->size) {
                 DEV_ERR("UBX-NAV-TIMEGPS message is incomplete!");
                 return -1;
@@ -72,16 +81,16 @@ int device_parse(DeviceInfo *gps_dev)
                  * bit 1: Week
                  * bit 2: Leap sec */
                 if (gps_dev->buf[i + NAV_TIMEGPS_VALID_OFFSET] & 0x7) {
-                    gps_dev->iTOW = COMBINE_FOUR_EIGHT_BIT(gps_dev->buf[i + NAV_TIMEGPS_iTOW_OFFSET],
-                                                           gps_dev->buf[i + NAV_TIMEGPS_iTOW_OFFSET + 1],
+                    gps_dev->iTOW = COMBINE_FOUR_EIGHT_BIT(gps_dev->buf[i + NAV_TIMEGPS_iTOW_OFFSET + 3],
                                                            gps_dev->buf[i + NAV_TIMEGPS_iTOW_OFFSET + 2],
-                                                           gps_dev->buf[i + NAV_TIMEGPS_iTOW_OFFSET + 3]);
-                    gps_dev->fTOW = COMBINE_FOUR_EIGHT_BIT(gps_dev->buf[i + NAV_TIMEGPS_fTOW_OFFSET],
-                                                           gps_dev->buf[i + NAV_TIMEGPS_fTOW_OFFSET + 1],
+                                                           gps_dev->buf[i + NAV_TIMEGPS_iTOW_OFFSET + 1],
+                                                           gps_dev->buf[i + NAV_TIMEGPS_iTOW_OFFSET]);
+                    gps_dev->fTOW = COMBINE_FOUR_EIGHT_BIT(gps_dev->buf[i + NAV_TIMEGPS_fTOW_OFFSET + 3],
                                                            gps_dev->buf[i + NAV_TIMEGPS_fTOW_OFFSET + 2],
-                                                           gps_dev->buf[i + NAV_TIMEGPS_fTOW_OFFSET + 3]);
-                    gps_dev->week = COMBINE_TWO_EIGHT_BIT(gps_dev->buf[i + NAV_TIMEGPS_WEEK_OFFSET],
-                                                          gps_dev->buf[i + NAV_TIMEGPS_WEEK_OFFSET + 1]);
+                                                           gps_dev->buf[i + NAV_TIMEGPS_fTOW_OFFSET + 1],
+                                                           gps_dev->buf[i + NAV_TIMEGPS_fTOW_OFFSET]);
+                    gps_dev->week = COMBINE_TWO_EIGHT_BIT(gps_dev->buf[i + NAV_TIMEGPS_WEEK_OFFSET + 1],
+                                                          gps_dev->buf[i + NAV_TIMEGPS_WEEK_OFFSET + 2]);
                     gps_dev->leap_sec = gps_dev->buf[i + NAV_TIMEGPS_LEAP_OFFSET];
                     gps_dev->valid = gps_dev->buf[i + NAV_TIMEGPS_VALID_OFFSET];
                     gps_dev->tAcc = gps_dev->buf[i + NAV_TIMEGPS_tAcc_OFFSET];
@@ -91,6 +100,7 @@ int device_parse(DeviceInfo *gps_dev)
             }
         } else if (gps_dev->buf[i] == '$') {
             /* NMEA */
+            // DEV_DBG("Parsing NMEA message");
         }
 
         i++;

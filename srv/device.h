@@ -33,7 +33,7 @@ typedef struct device_info {
     uint32_t week;
     uint8_t leap_sec;
     uint8_t valid;
-    uint8_t tAcc; // time accuracy estimate
+    uint32_t tAcc; // time accuracy estimate
 } DeviceInfo;
 
 #define DEV_INFO(format, ...)  do { \
@@ -57,6 +57,8 @@ typedef struct device_info {
 #endif // DEV_DEBUG
 
 int device_init(DeviceInfo *gps_dev);
+int device_read(DeviceInfo *gps_dev);
+int device_parse(DeviceInfo *gps_dev);
 int device_close(DeviceInfo *gps_dev);
 
 #endif // DEVICE_H

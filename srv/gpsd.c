@@ -1,6 +1,5 @@
 #include "gpsd.h" // libaries, print macros, and data structures
 #include "ubx.h" // UBX-related APIs
-#include "device.h" // device-related APIs
 
 GpsdData g_gpsd_data;
 GpsdBuf gpsd_buf;
@@ -29,6 +28,7 @@ static void __attribute__((unused)) test_log()
 int main(int argc, char **argv)
 {
     GpsdData *gpsd = &g_gpsd_data;
+    DeviceInfo *gps_dev = &gpsd->gps_dev;
     int size = 0;
     uint8_t *buf;
     char *buf_ptr = NULL;
@@ -45,8 +45,8 @@ int main(int argc, char **argv)
     gpsd_buf.curr_type = GPSD_MSG_NUM;
 
     /* Initialize GPS device */
-    strncpy(gpsd->dev_name, argv[1], sizeof(gpsd->dev_name));
-    if (device_init(gpsd)) {
+    strncpy(gpsd->gps_dev.name, argv[1], sizeof(gpsd->gps_dev.name));
+    if (device_init(gps_dev)) {
         exit(0);
     }
 
@@ -69,15 +69,27 @@ int main(int argc, char **argv)
     }
 
     while (!gpsd->stop) {
+        if (device_read(gps_dev)) {
+            GPSD_ERR("Failed to read GPS device");
+        }
+
+        if (device_parse(gps_dev)) {
+            GPSD_ERR("Failed to parse GPS message");
+        } else {
+            GPSD_INFO("TOW: %u, Week: %u, Leap sec: %u, Valid: 0x%X",
+                        gps_dev->iTOW, gps_dev->week, gps_dev->leap_sec, gps_dev->valid);
+        }
+
+#if 0
         if (gpsd_buf.nmea_idx == 512 && gpsd_buf.ubx_idx == 512) {
             break;
         }
 
-        size = read(gpsd->fd, buf, RD_BUFSIZE);
+        size = read(gpsd->gps_dev.fd, buf, RD_BUFSIZE);
         buf[size] = '\0';
 
         if (size <= 0) {
-            GPSD_ERR("[%s] Cannot read fd %d (err: %s)\n", __FILE__, gpsd->fd, strerror(errno));
+            GPSD_ERR("[%s] Cannot read fd %d (err: %s)\n", __FILE__, gpsd->gps_dev.fd, strerror(errno));
         } else if (errno == EINTR) {
             GPSD_ERR("[%s] Read operation was interrupted (err: %s)\n", __FILE__, strerror(errno));
         }
@@ -109,9 +121,10 @@ int main(int argc, char **argv)
         }
 
         sleep(1); // sleep 1 second to simulate PPS interrupt
+#endif
     }
     
-    GPSD_INFO("%s", gpsd_buf.nmea);
+    // GPSD_INFO("%s", gpsd_buf.nmea);
     
     free(buf);
 
@@ -119,7 +132,7 @@ int main(int argc, char **argv)
     socket_server_close(&gpsd->srv);
 #endif
 
-    device_close(gpsd);
+    device_close(gps_dev);
 
     return 0;
 }

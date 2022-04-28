@@ -13,9 +13,10 @@
 #include <poll.h>
 #include <errno.h>
 
+#include "device.h" // device-related APIs
+#include "../socket/socket.h" // socket-related APIs
 #include "../include/define.h"
 #include "../include/client.h"
-#include "../socket/socket.h" // socket-related APIs
 
 extern int errno;
 
@@ -62,8 +63,7 @@ typedef struct gpsd_buf {
 } GpsdBuf;
 
 typedef struct gpsd_data {
-    int fd; // file descriptor
-    char dev_name[64]; // device name
+    DeviceInfo gps_dev;
     ServerSocket srv;
     int stop; // set to 1 by CTRL-C
 } GpsdData;
