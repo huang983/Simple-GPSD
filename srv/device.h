@@ -28,9 +28,9 @@ typedef struct device_info {
     /* Below are time-related info extracted from the GPS module */
     PosFixMode mode; 
     uint8_t locked_sat; // number of locked satellites
-    uint8_t iTOW;
-    uint8_t fTOW;
-    uint8_t week;
+    uint32_t iTOW;
+    uint32_t fTOW;
+    uint32_t week;
     uint8_t leap_sec;
     uint8_t valid;
     uint8_t tAcc; // time accuracy estimate

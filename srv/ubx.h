@@ -5,6 +5,8 @@
 #include "nmea.h"
 
 #define COMBINE_TWO_EIGHT_BIT(msb, lsb) (((msb << 8)) | (lsb))
+#define COMBINE_FOUR_EIGHT_BIT(first, second, third, fourth) \
+                                (((first << 24) | (second << 16) | (third << 8)) | (fourth))
 
 /* Indices for UBX message */
 #define UBX_IDX_SYNC1               0
