@@ -36,7 +36,7 @@ int device_init(DeviceInfo *gps_dev)
 int device_read(DeviceInfo *gps_dev)
 {
     /* TODO: wait for PPS interrupt first */
-    // sleep(1);
+    sleep(1);
 
     /* Read from device */
     if ((gps_dev->size = read(gps_dev->fd, gps_dev->buf, DEV_RD_BUF_SIZE))
@@ -85,12 +85,13 @@ int device_parse(DeviceInfo *gps_dev)
                                                            gps_dev->buf[i + NAV_TIMEGPS_iTOW_OFFSET + 2],
                                                            gps_dev->buf[i + NAV_TIMEGPS_iTOW_OFFSET + 1],
                                                            gps_dev->buf[i + NAV_TIMEGPS_iTOW_OFFSET]);
+                    gps_dev->iTOW /= 1000; // convert to second
                     gps_dev->fTOW = COMBINE_FOUR_EIGHT_BIT(gps_dev->buf[i + NAV_TIMEGPS_fTOW_OFFSET + 3],
                                                            gps_dev->buf[i + NAV_TIMEGPS_fTOW_OFFSET + 2],
                                                            gps_dev->buf[i + NAV_TIMEGPS_fTOW_OFFSET + 1],
                                                            gps_dev->buf[i + NAV_TIMEGPS_fTOW_OFFSET]);
                     gps_dev->week = COMBINE_TWO_EIGHT_BIT(gps_dev->buf[i + NAV_TIMEGPS_WEEK_OFFSET + 1],
-                                                          gps_dev->buf[i + NAV_TIMEGPS_WEEK_OFFSET + 2]);
+                                                          gps_dev->buf[i + NAV_TIMEGPS_WEEK_OFFSET]);
                     gps_dev->leap_sec = gps_dev->buf[i + NAV_TIMEGPS_LEAP_OFFSET];
                     gps_dev->valid = gps_dev->buf[i + NAV_TIMEGPS_VALID_OFFSET];
                     gps_dev->tAcc = gps_dev->buf[i + NAV_TIMEGPS_tAcc_OFFSET];
