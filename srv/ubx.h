@@ -36,12 +36,12 @@
 #define UBX_CFG_MSG_OFF             0x00
 
 /* UBX-NAV-TIMEGPS related */
-#define NAV_TIMEGPS_iTOW_OFFSET     5
-#define NAV_TIMEGPS_fTOW_OFFSET     6
-#define NAV_TIMEGPS_WEEK_OFFSET     7
-#define NAV_TIMEGPS_LEAP_OFFSET     8
-#define NAV_TIMEGPS_VALID_OFFSET    9
-#define NAV_TIMEGPS_tAcc_OFFSET     10
+#define NAV_TIMEGPS_iTOW_OFFSET     6
+#define NAV_TIMEGPS_fTOW_OFFSET     10
+#define NAV_TIMEGPS_WEEK_OFFSET     14
+#define NAV_TIMEGPS_LEAP_OFFSET     16
+#define NAV_TIMEGPS_VALID_OFFSET    17
+#define NAV_TIMEGPS_tAcc_OFFSET     18
 
 typedef struct ubx_msg {
     uint8_t header[2];
