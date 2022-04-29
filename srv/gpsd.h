@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <ctype.h> // getopt
 #include <fcntl.h>
 #include <unistd.h> // write and close
 #include <termios.h>
@@ -48,23 +49,10 @@ extern int errno;
 #define GPSD_DBG(format, ...)
 #endif // GPSD_DEBUG
 
-typedef enum {
-    GPSD_MSG_UBX = 0,
-    GPSD_MSG_NMEA,
-    GPSD_MSG_NUM,
-} GpsdMsgType;
-
-typedef struct gpsd_buf {
-    char ubx[512];
-    char nmea[512];
-    int ubx_idx;
-    int nmea_idx;
-    GpsdMsgType curr_type;
-} GpsdBuf;
-
 typedef struct gpsd_data {
     DeviceInfo gps_dev;
     ServerSocket srv;
+    int show_result; // print parsing result
     int stop; // set to 1 by CTRL-C
 } GpsdData;
 

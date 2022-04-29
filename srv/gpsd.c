@@ -2,7 +2,6 @@
 #include "ubx.h" // UBX-related APIs
 
 GpsdData g_gpsd_data;
-GpsdBuf gpsd_buf;
 
 void sig_handler(int sig)
 {
@@ -18,23 +17,63 @@ static void __attribute__((unused)) test_log()
     GPSD_DBG("Hello%s", ", I'm Tim :)");
 }
 
+static void usage(void)
+{
+    printf("usage: gpsd [OPTIONS] device\n\n\
+  Options include: \n\
+  -S       = Show time position-fix status \n");
+
+}
+
+static int parse_args(int argc, char **argv)
+{
+    GpsdData *gpsd = &g_gpsd_data;
+    DeviceInfo *gps_dev = &gpsd->gps_dev;
+    const char *optstr = "S";
+    int ch;
+
+    /* Parse options */
+    while ((ch = getopt(argc, argv, optstr)) != -1) {
+        switch (ch) {
+            case 'S':
+                /* Print parsing result */
+                gpsd->show_result = 1;
+                break;
+            default:
+                usage();
+                break;
+        }
+    }
+
+    /* Get device name */
+    if (optind >= argc) {
+        GPSD_ERR("Please provide device path (optind: %d, argc: %d)",
+                    optind, argc);
+        return -1;
+    }
+
+    GPSD_DBG("Device: %s, size: %ld", argv[optind], sizeof(gps_dev->name));
+    strncpy(gps_dev->name, argv[optind], sizeof(gps_dev->name));
+
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     GpsdData *gpsd = &g_gpsd_data;
     DeviceInfo *gps_dev = &gpsd->gps_dev;
 
-    if (argc < 2) {
-        GPSD_INFO("Please provide device path!");
-        return 0;
-    }
-    
     /* Iniialize GPSD data */
     memset(gpsd, 0, sizeof(*gpsd));
-    memset(&gpsd_buf, 0, sizeof(gpsd_buf));
-    gpsd_buf.curr_type = GPSD_MSG_NUM;
+
+    /* Parse command-line options */
+    if (parse_args(argc, argv)) {
+        GPSD_ERR("Parsing failed. Exiting program!");
+        exit(0);
+    }
 
     /* Initialize GPS device */
-    strncpy(gpsd->gps_dev.name, argv[1], sizeof(gpsd->gps_dev.name));
+    GPSD_DBG("Device: %s", gps_dev->name);
     if (device_init(gps_dev)) {
         exit(0);
     }
@@ -60,8 +99,10 @@ int main(int argc, char **argv)
 
         if (device_parse(gps_dev)) {
             GPSD_ERR("Failed to parse GPS message");
-        } else {
-            GPSD_DBG("TOW: %u, Week: %u, Leap sec: %u, Valid: 0x%X, Pos hold mode: %d, Locked sat: %u",
+        }
+
+        if (gpsd->show_result) {
+            GPSD_INFO("TOW: %u, Week: %u, Leap sec: %u, Valid: 0x%X, Pos fix mode: %d, Locked sat: %u",
                         gps_dev->iTOW, gps_dev->week, gps_dev->leap_sec, gps_dev->valid,
                         gps_dev->mode, gps_dev->locked_sat);
         }
