@@ -16,8 +16,13 @@
 #define NMEA_MSG_OFFSET         3
 #define NMEA_DELIMETER          ','
 
+/* Generic NMEA offset */
+#define NMEA_TID_OFFSET         1
+#define NMEA_CLASS_OFFSET       3
+
 /* GSA related */
 #define NMEA_GSA_OP_OFFSET      7
-#define NMEA_GSA_NAV_OFFSET     8
+#define NMEA_GSA_NAV_OFFSET     9
+#define NMEA_GSA_SVID_OFFSET    11
 
 #endif /* NMEA_H */

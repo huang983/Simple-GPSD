@@ -14,7 +14,8 @@
 extern int errno;
 
 typedef enum {
-    NO_POS_FIX = 0,
+    POS_FIX_PAD = 0,
+    NO_POS_FIX,
     POS_2D_GNSS_FIX,
     POS_3D_GNSS_FIX,
     POS_FIX_NUM,

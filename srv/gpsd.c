@@ -61,9 +61,9 @@ int main(int argc, char **argv)
         if (device_parse(gps_dev)) {
             GPSD_ERR("Failed to parse GPS message");
         } else {
-            GPSD_DBG("TOW: %u, Week: %u, Leap sec: %u, Valid: 0x%X, Pos hold mode: %d",
+            GPSD_DBG("TOW: %u, Week: %u, Leap sec: %u, Valid: 0x%X, Pos hold mode: %d, Locked sat: %u",
                         gps_dev->iTOW, gps_dev->week, gps_dev->leap_sec, gps_dev->valid,
-                        gps_dev->mode);
+                        gps_dev->mode, gps_dev->locked_sat);
         }
     }
         

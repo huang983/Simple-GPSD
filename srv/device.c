@@ -60,15 +60,18 @@ int device_read(DeviceInfo *gps_dev)
 int device_parse(DeviceInfo *gps_dev)
 {
     int i = 0;
+    int j = 0;
 
     if (gps_dev->size <= 0) {
-        DEV_ERR("Size is 0. Nothing to parse!");
+        DEV_ERR("Size is %d. Nothing to parse!", gps_dev->size);
     }
+
+    /* Reset locked satellites */
+    gps_dev->locked_sat = 0;
 
     while (i < gps_dev->size) {
         if (gps_dev->buf[i] == 0xB5) {
             /* UBX message */
-            DEV_DBG("Parsing UBX message");
             if ((i + NAV_TIMEGPS_tAcc_OFFSET) >= gps_dev->size) {
                 DEV_ERR("UBX-NAV-TIMEGPS message is incomplete!");
                 return -1;
@@ -101,10 +104,12 @@ int device_parse(DeviceInfo *gps_dev)
             }
         } else if (gps_dev->buf[i] == '$') {
             /* NMEA */
-            DEV_DBG("Parsing NMEA message");
             if (strncmp((char *)&gps_dev->buf[i + 3], "GSA", 3) == 0) {
-                DEV_DBG("Talker ID: %.2s, Class: %.3s, Op mode: %c, Nav mode: %c", &gps_dev->buf[i + 1],
-                        &gps_dev->buf[i + 3], gps_dev->buf[i + 7], gps_dev->buf[i + 9]);
+                DEV_DBG("Talker ID: %.2s, Class: %.3s, Op mode: %c, Nav mode: %c",
+                        &gps_dev->buf[i + NMEA_TID_OFFSET], &gps_dev->buf[i + NMEA_CLASS_OFFSET],
+                        gps_dev->buf[i + NMEA_GSA_OP_OFFSET], gps_dev->buf[i + NMEA_GSA_NAV_OFFSET]);
+                DEV_DBG("SVID: %.36s", &gps_dev->buf[i + NMEA_GSA_SVID_OFFSET]);
+                
                 /* Get position fix mode */
                 switch (gps_dev->buf[i + NMEA_GSA_NAV_OFFSET]) {
                     case '1':
@@ -118,6 +123,20 @@ int device_parse(DeviceInfo *gps_dev)
                         break;
                     default:
                         gps_dev->mode = POS_FIX_NUM;
+                }
+
+                /* Count number of locked satellites */
+                j = i + NMEA_GSA_SVID_OFFSET;
+                while (j < gps_dev->size) {
+                    if (gps_dev->buf[j] == ',') {
+                        gps_dev->locked_sat++;
+
+                        if (((j + 1) < gps_dev->size) && gps_dev->buf[j + 1] == ',') {
+                            break;
+                        }
+                    }
+
+                    j++;
                 }
             }
         }
