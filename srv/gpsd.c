@@ -21,7 +21,7 @@ static void usage(void)
 {
     printf("usage: gpsd [OPTIONS] device\n\n\
   Options include: \n\
-  -S       = Show time position-fix status \n");
+  -S       = Show time and position-fix status \n");
 
 }
 
@@ -62,6 +62,7 @@ int main(int argc, char **argv)
 {
     GpsdData *gpsd = &g_gpsd_data;
     DeviceInfo *gps_dev = &gpsd->gps_dev;
+    ServerSocket *srv = &gpsd->srv;
 
     /* Iniialize GPSD data */
     memset(gpsd, 0, sizeof(*gpsd));
@@ -80,7 +81,7 @@ int main(int argc, char **argv)
 
 #ifdef SCKT_ENABLE
     /* Set up Unix-domain socket connection */
-    if (socket_server_init(&gpsd->srv)) {
+    if (socket_server_init(srv)) {
         exit(0);
     }
 
@@ -106,10 +107,16 @@ int main(int argc, char **argv)
                         gps_dev->iTOW, gps_dev->week, gps_dev->leap_sec, gps_dev->valid,
                         gps_dev->mode, gps_dev->locked_sat);
         }
+
+#ifdef SCKT_ENABLE
+        if (socket_try_read(srv->fd, gpsd->rd_buf, GPSD_BUFSIZE) > 0) {
+            /* TODO: parse client's query and send back the result */       
+        }
+#endif
     }
         
 #ifdef SCKT_ENABLE
-    socket_server_close(&gpsd->srv);
+    socket_server_close(srv);
 #endif
 
     device_close(gps_dev);

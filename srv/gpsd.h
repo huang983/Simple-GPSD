@@ -21,7 +21,7 @@
 
 extern int errno;
 
-#define RD_BUFSIZE 1024
+#define GPSD_BUFSIZE 1024
 #define NMEA_BUFSIZE 512
 #define UBX_BUFSIZE 512
 
@@ -52,6 +52,8 @@ extern int errno;
 typedef struct gpsd_data {
     DeviceInfo gps_dev;
     ServerSocket srv;
+    char rd_buf[GPSD_BUFSIZE]; // buffer to read client's message
+    char wr_buf[GPSD_BUFSIZE]; // buffer to send client message
     int show_result; // print parsing result
     int stop; // set to 1 by CTRL-C
 } GpsdData;
