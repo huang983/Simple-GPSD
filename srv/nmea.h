@@ -11,6 +11,7 @@
 #define NMEA_ID_GSA             0x02
 #define NMEA_ID_GSV             0x03
 #define NMEA_ID_RMC             0x04
+#define NMEA_ID_ZDA             0x08
 
 #define NMEA_TID_OFFSET         1
 #define NMEA_MSG_OFFSET         3

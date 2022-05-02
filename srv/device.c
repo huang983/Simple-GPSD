@@ -40,8 +40,8 @@ int device_read(DeviceInfo *gps_dev)
         return -1;
     }
     
-    // DEV_DBG("size: %d", gps_dev->size);
-    // DEV_DBG("Message: %s", gps_dev->buf);
+    DEV_DBG("size: %d", gps_dev->size);
+    DEV_DBG("Message: %s", gps_dev->buf);
 
     return 0;
 }

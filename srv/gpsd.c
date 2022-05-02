@@ -1,5 +1,6 @@
 #include "gpsd.h" // libaries, print macros, and data structures
 #include "ubx.h" // UBX-related APIs
+#include "nmea.h"
 
 GpsdData g_gpsd_data;
 
@@ -91,7 +92,22 @@ int main(int argc, char **argv)
 
     /* Poll UBX-NAV-TIMETGPS once per second */
     if (ubx_set_msg_rate(gps_dev->fd, UBX_CLASS_NAV, UBX_ID_NAV_TIMEGPS, UBX_CFG_MSG_ON)) {
-        DEV_ERR("Failed to set UBX-NAV-TIMETGPS message rate");
+        GPSD_ERR("Failed to set UBX-NAV-TIMETGPS message rate");
+        goto close_device;
+    }
+
+    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_GSV, UBX_CFG_MSG_OFF)) {
+        GPSD_ERR("Failed to set UBX-NAV-TIMETGPS message rate");
+        goto close_device;
+    }
+
+    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_GLL, UBX_CFG_MSG_OFF)) {
+        GPSD_ERR("Failed to set UBX-NAV-TIMETGPS message rate");
+        goto close_device;
+    }
+
+    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_ZDA, UBX_CFG_MSG_OFF)) {
+        GPSD_ERR("Failed to set UBX-NAV-TIMETGPS message rate");
         goto close_device;
     }
 
