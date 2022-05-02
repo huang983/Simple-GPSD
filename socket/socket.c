@@ -15,7 +15,7 @@ int socket_server_init(ServerSocket *srv)
     strncpy(srv->socket_file, SCKT_FILE, sizeof(srv->socket_file));
 
     /* Create socket for local communication only */
-    srv->fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    srv->fd = socket(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK, 0);
     if (srv->fd < 0)
     {
         SCKT_ERR("Failed to create socket");
@@ -58,19 +58,30 @@ int socket_server_init(ServerSocket *srv)
         srv->clnt_fd[i] = -1;
     }
 
-    /* Accept incoming client connection
-     * Note that this function will block until a request comes in
-     * TODO: accept multiple clients */
-    if ((srv->clnt_fd[0] = accept(srv->fd, (struct sockaddr*)&srv->clnt_addr[0],
-                                &srv->clnt_addr_len[0]))
-        < 0) {
-        SCKT_ERR("Failed to accept client connection!");
-        return -1;
+    if (socket_server_try_accept(srv) < 0) {
+        SCKT_INFO("No client connection yet!");
+    } else {
+        SCKT_INFO("Connection w/ cllient %d established", srv->clnt_fd[0]);
     }
 
-    SCKT_INFO("Connection w/ cllient %d established", srv->clnt_fd[0]);
-
     return 0;
+}
+
+/**
+ * @brief Try to accept incoming client connection if any
+ * 
+ * @note The socket should be set as non-blocking before using this APi
+ * @see socket_server_init()
+ * @param srv 
+ * @return int file descriptor
+ */
+int socket_server_try_accept(ServerSocket *srv)
+{
+    /* TODO: accept multiple clients */
+    srv->clnt_fd[0] = accept(srv->fd, (struct sockaddr*)&srv->clnt_addr[0],
+                                &srv->clnt_addr_len[0]);
+
+    return srv->clnt_fd[0];
 }
 
 /**
@@ -163,6 +174,12 @@ int socket_try_read(socket_t fd, char *buf, int size)
     struct pollfd fds;
     int ret = 0;
 
+    /* Validate fd */
+    if (fd < 0) {
+        SCKT_ERR("Invalid fd %d", fd);
+        return -1;
+    }
+
     /* Poll the fd */
     memset(&fds, 0, sizeof(fds));
     fds.fd = fd;
@@ -175,7 +192,7 @@ int socket_try_read(socket_t fd, char *buf, int size)
         return recv(fd, buf, size, 0);
     }
 
-    SCKT_DBG("Nothing to read");
+    SCKT_DBG("Nothing to read (revents: %d)", fds.revents);
 
     return 0;
 }

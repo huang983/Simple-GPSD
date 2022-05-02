@@ -62,6 +62,7 @@ typedef struct client_socket {
 int socket_server_init(ServerSocket *srv);
 int socket_server_close(ServerSocket *srv);
 int socket_client_init(ClientSocket *clnt);
+int socket_server_try_accept(ServerSocket *srv);
 int socket_client_close(ClientSocket *clnt);
 int socket_try_read(socket_t fd, char *buf, int size);
 int socket_read(socket_t fd, char *buf, int size);

@@ -109,14 +109,21 @@ int main(int argc, char **argv)
         }
 
 #ifdef SCKT_ENABLE
-        if (socket_try_read(srv->clnt_fd[0], gpsd->rd_buf, GPSD_BUFSIZE) > 0) {
-            /* Parse client's query and send back the result */
-            char res[5];
+        if (srv->clnt_fd[0] == -1) {
+            /* No client connection yet */
+            socket_server_try_accept(srv);
+        }
 
-            sprintf(res, "%d", gps_dev->mode);
-            if (socket_write(srv->clnt_fd[0], res) <= 0) {
-                GPSD_ERR("Failed to send to client %d", srv->clnt_fd[0]);
-            }   
+        if (srv->clnt_fd[0] > 0) {
+            if (socket_try_read(srv->clnt_fd[0], gpsd->rd_buf, GPSD_BUFSIZE) > 0) {
+                /* TODO: parse client's query and send back the corresponding result */
+                char res[5];
+
+                sprintf(res, "%d", gps_dev->mode);
+                if (socket_write(srv->clnt_fd[0], res) <= 0) {
+                    GPSD_ERR("Failed to send to client %d", srv->clnt_fd[0]);
+                }   
+            }
         }
 #endif
     }
