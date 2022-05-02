@@ -37,6 +37,10 @@
 #define UBX_CFG_MSG_ON              0x01
 #define UBX_CFG_MSG_OFF             0x00
 
+/* UBX-ACK related */
+#define UBX_ACK_ACK                 0x01
+#define UBX_ACK_NAK                 0x00
+
 /* UBX-NAV-TIMEGPS related */
 #define NAV_TIMEGPS_iTOW_OFFSET     6
 #define NAV_TIMEGPS_fTOW_OFFSET     10
@@ -55,5 +59,26 @@ typedef struct ubx_msg {
 } UbxMsg;
 
 int ubx_set_msg_rate(int fd, uint8_t class, uint8_t id, uint8_t rate);
+
+#define UBX_INFO(format, ...)  do { \
+                                    printf("[UBX][INFO] " format, ##__VA_ARGS__); \
+                                    printf("\n"); \
+                                } while(0)
+
+// TODO: use perror instead()
+#define UBX_ERR(format, ...)   do { \
+                                    printf("[UBX][ERROR][%s][%d] " format, \
+                                        __func__, __LINE__, ##__VA_ARGS__); \
+                                    printf(" (err: %s)\n", strerror(errno)); \
+                                } while(0)
+#ifdef UBX_DEBUG
+#define UBX_DBG(format, ...)   do { \
+                                    printf("[UBX][DEBUG][%s][%d] " format, \
+                                        __func__, __LINE__, ##__VA_ARGS__); \
+                                    printf("\n"); \
+                                } while (0)
+#else
+#define UBX_DBG(format, ...)
+#endif // UBX_DEBUG
 
 #endif // UBX_H

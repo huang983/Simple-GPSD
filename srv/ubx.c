@@ -40,6 +40,77 @@ static void check_sum(UbxMsg *ubx_msg)
     return;
 }
 
+/**
+ * @brief Wait for ACK message from the U-blox
+ * 
+ * @param id 
+ * @return int 0 on success, -1 failed
+ */
+static int wait_for_ack(int fd, uint8_t class, uint8_t id)
+{
+#define WAIT_ACK_BUF_SZ 256
+#define ACK_MSG_LEN 10
+    uint8_t buf[WAIT_ACK_BUF_SZ];
+    uint8_t ack_msg[ACK_MSG_LEN] = { UBX_SYNC1, UBX_SYNC2, UBX_CLASS_ACK, UBX_ACK_ACK,
+                                     0x02, 0x00, 0x00, 0x00, 0x00, 0x00 }; // skip checksum
+    int size = 0;
+    int ack_msg_recv = 0; // # of bytes received
+    int cnt = 0; // return -1 if read more than 5 times
+    int i = 0;
+
+    /* Assign class, ID, and checksum */
+    ack_msg[6] = class;
+    ack_msg[7] = id;
+
+    for (i = 2; i < (ACK_MSG_LEN - 2); i++) {
+        ack_msg[8] += ack_msg[i];
+        ack_msg[9] += ack_msg[8];
+    }
+
+    while (ack_msg_recv < ACK_MSG_LEN) {
+        if (cnt == 5) {
+            UBX_ERR("Failed to get ACK message! (bytes received: %d)",
+                     ack_msg_recv);
+            return -1;
+        }
+
+        usleep(500000);
+
+        size = read(fd, buf, WAIT_ACK_BUF_SZ);
+        if (size <= 0) {
+            continue;
+        } else if (ack_msg_recv > 0) {
+            /* Use multiple reads to get a complete UBX message */
+            i = 0;
+            goto parse_ack_msg;
+        }
+
+        for (i = 0; i < size; i++) {
+            if (buf[i] == UBX_SYNC1) {
+                break;
+            }
+        }
+
+parse_ack_msg:
+        while (i < size && ack_msg_recv < ACK_MSG_LEN) {
+            if (buf[i] != ack_msg[ack_msg_recv]) {
+                UBX_ERR("buf[%d]: 0x%0X, ack_msg[%d]: 0x%08X",
+                         i, buf[i], ack_msg_recv, ack_msg[ack_msg_recv]);
+                return -1;
+            }
+
+            i++;
+            ack_msg_recv++;
+        }
+
+        cnt++;
+    }
+
+    UBX_INFO("Successfuly get ACK message!");
+
+    return 0;
+}
+
 /** 
  * @brief set the message rate of the given message class and ID
  * @param fd file descriptor of the device
@@ -78,5 +149,5 @@ int ubx_set_msg_rate(int fd, uint8_t class, uint8_t id, uint8_t rate)
         printf("[%s] bytes written: %d (%s)\n", __FILE__, size, strerror(errno));
     }
 
-    return GPSD_RET_SUCCESS;
+    return wait_for_ack(fd, UBX_CLASS_CFG, UBX_ID_CFG_MSG);
 }

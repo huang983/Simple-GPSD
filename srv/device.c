@@ -19,11 +19,6 @@ int device_init(DeviceInfo *gps_dev)
 
     DEV_INFO("Successfully opened %s", gps_dev->name);
 
-    /* Poll UBX-NAV-TIMETGPS once per second */
-    if (ubx_set_msg_rate(gps_dev->fd, UBX_CLASS_NAV, UBX_ID_NAV_TIMEGPS, UBX_CFG_MSG_ON)) {
-        DEV_ERR("Failed to set UBX-NAV-TIMETGPS message rate");
-    }
-
     return 0;
 }
 
@@ -74,6 +69,10 @@ int device_parse(DeviceInfo *gps_dev)
             /* UBX message */
             if ((i + NAV_TIMEGPS_tAcc_OFFSET) >= gps_dev->size) {
                 DEV_ERR("UBX-NAV-TIMEGPS message is incomplete!");
+                for (j = i; j < gps_dev->size; j++) {
+                    printf("0x%X ", gps_dev->buf[j]);
+                }
+                printf("\n");
                 return -1;
             }
 

@@ -89,6 +89,12 @@ int main(int argc, char **argv)
         exit(0);
     }
 
+    /* Poll UBX-NAV-TIMETGPS once per second */
+    if (ubx_set_msg_rate(gps_dev->fd, UBX_CLASS_NAV, UBX_ID_NAV_TIMEGPS, UBX_CFG_MSG_ON)) {
+        DEV_ERR("Failed to set UBX-NAV-TIMETGPS message rate");
+        goto close_device;
+    }
+
     if (gpsd->socket_enable) {
         /* Set up Unix-domain socket connection */
         if (socket_server_init(srv)) {
@@ -146,6 +152,7 @@ int main(int argc, char **argv)
         socket_server_close(srv);
     }
 
+close_device:
     device_close(gps_dev);
 
     return 0;
