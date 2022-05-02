@@ -21,7 +21,8 @@ static void usage(void)
 {
     printf("usage: gpsd [OPTIONS] device\n\n\
   Options include: \n\
-  -S       = Show time and position-fix status \n");
+  -s       = Show time and position-fix status \n\
+  -u       = Create Unix-domain socket\n");
 
 }
 
@@ -29,15 +30,23 @@ static int parse_args(int argc, char **argv)
 {
     GpsdData *gpsd = &g_gpsd_data;
     DeviceInfo *gps_dev = &gpsd->gps_dev;
-    const char *optstr = "S";
+    // ServerSocket *srv = &gpsd->srv;
+    const char *optstr = "su:";
     int ch;
 
     /* Parse options */
     while ((ch = getopt(argc, argv, optstr)) != -1) {
         switch (ch) {
-            case 'S':
+            case 's':
                 /* Print parsing result */
                 gpsd->show_result = 1;
+                break;
+            case 'u':
+                /* Unix-domain socket */
+                gpsd->socket_enable = 1;
+                /* Hardcode socket file for now */
+                // strncpy(srv->addr.sun_path, optarg, strlen(optarg));
+                // GPSD_INFO("Socket file: %s", srv->addr.sun_path);
                 break;
             default:
                 usage();
@@ -63,6 +72,7 @@ int main(int argc, char **argv)
     GpsdData *gpsd = &g_gpsd_data;
     DeviceInfo *gps_dev = &gpsd->gps_dev;
     ServerSocket *srv = &gpsd->srv;
+    int ret = 0;
 
     /* Iniialize GPSD data */
     memset(gpsd, 0, sizeof(*gpsd));
@@ -79,14 +89,14 @@ int main(int argc, char **argv)
         exit(0);
     }
 
-#ifdef SCKT_ENABLE
-    /* Set up Unix-domain socket connection */
-    if (socket_server_init(srv)) {
-        exit(0);
-    }
+    if (gpsd->socket_enable) {
+        /* Set up Unix-domain socket connection */
+        if (socket_server_init(srv)) {
+            exit(0);
+        }
 
-    GPSD_INFO("Socket setup is successful");
-#endif
+        GPSD_INFO("Socket setup is successful");
+    }
 
 
     /* Stop the program by CTRL+C */
@@ -108,29 +118,33 @@ int main(int argc, char **argv)
                         gps_dev->mode, gps_dev->locked_sat);
         }
 
-#ifdef SCKT_ENABLE
-        if (srv->clnt_fd[0] == -1) {
-            /* No client connection yet */
-            socket_server_try_accept(srv);
-        }
+        if (gpsd->socket_enable) {
+            if (srv->client[0].fd == -1) {
+                /* No client connection yet */
+                socket_server_try_accept(srv);
+            }
 
-        if (srv->clnt_fd[0] > 0) {
-            if (socket_try_read(srv->clnt_fd[0], gpsd->rd_buf, GPSD_BUFSIZE) > 0) {
-                /* TODO: parse client's query and send back the corresponding result */
-                char res[5];
+            if (srv->client[0].fd > 0) {
+                ret = socket_try_read(srv->client[0].fd, gpsd->rd_buf, GPSD_BUFSIZE);
+                if (ret > 0) {
+                    /* TODO: parse client's query and send back the corresponding result */
+                    char res[5];
 
-                sprintf(res, "%d", gps_dev->mode);
-                if (socket_write(srv->clnt_fd[0], res) <= 0) {
-                    GPSD_ERR("Failed to send to client %d", srv->clnt_fd[0]);
-                }   
+                    sprintf(res, "%d", gps_dev->mode);
+                    if (socket_write(srv->client[0].fd, res) <= 0) {
+                        GPSD_ERR("Failed to send to client %d", srv->client[0].fd);
+                    }
+                } else if (ret < 0) {
+                    /* Client has closed the connection */
+                    socket_client_close(&srv->client[0]);
+                }
             }
         }
-#endif
     }
         
-#ifdef SCKT_ENABLE
-    socket_server_close(srv);
-#endif
+    if (gpsd->socket_enable) {
+        socket_server_close(srv);
+    }
 
     device_close(gps_dev);
 

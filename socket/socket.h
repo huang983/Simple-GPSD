@@ -8,7 +8,8 @@
 #include <unistd.h> // write and close
 #include <sys/socket.h> // socket API
 #include <sys/un.h> // unix-domain data structure
-#include <poll.h> // for polling
+#include <poll.h> // polling
+#include <fcntl.h> // fcntl 
 #include <signal.h>
 #include <errno.h>
 
@@ -43,21 +44,19 @@ extern int errno;
 #define SCKT_DBG(format, ...)
 #endif // SCKT_DEBUG
 
-typedef struct server_socket {
-    socket_t fd; // server's socket descriptor
-    struct sockaddr_un addr;
-    socket_t clnt_fd[SCKT_MAX_CLIENT]; // client's socket descriptor
-    struct sockaddr_un clnt_addr[SCKT_MAX_CLIENT];
-    socklen_t clnt_addr_len[SCKT_MAX_CLIENT];
-    char socket_file[64];
-} ServerSocket; 
-
 typedef struct client_socket {
     socket_t fd;
     struct sockaddr_un addr;
     socklen_t addr_len;
     char socket_file[64];
 } ClientSocket;
+
+typedef struct server_socket {
+    socket_t fd; // server's socket descriptor
+    struct sockaddr_un addr;
+    ClientSocket client[SCKT_MAX_CLIENT];
+    char socket_file[64];
+} ServerSocket;
 
 int socket_server_init(ServerSocket *srv);
 int socket_server_close(ServerSocket *srv);

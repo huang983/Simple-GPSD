@@ -55,13 +55,13 @@ int socket_server_init(ServerSocket *srv)
 
     /* Initialize clients' FDs to -1 */
     for (i = 0; i < SCKT_MAX_CLIENT; i++) {
-        srv->clnt_fd[i] = -1;
+        srv->client[i].fd = -1;
     }
 
     if (socket_server_try_accept(srv) < 0) {
         SCKT_INFO("No client connection yet!");
     } else {
-        SCKT_INFO("Connection w/ cllient %d established", srv->clnt_fd[0]);
+        SCKT_INFO("Connection w/ cllient %d established", srv->client[i].fd);
     }
 
     return 0;
@@ -78,10 +78,10 @@ int socket_server_init(ServerSocket *srv)
 int socket_server_try_accept(ServerSocket *srv)
 {
     /* TODO: accept multiple clients */
-    srv->clnt_fd[0] = accept(srv->fd, (struct sockaddr*)&srv->clnt_addr[0],
-                                &srv->clnt_addr_len[0]);
+    srv->client[0].fd = accept(srv->fd, (struct sockaddr*)&srv->client[0].addr,
+                                &srv->client[0].addr_len);
 
-    return srv->clnt_fd[0];
+    return srv->client[0].fd;
 }
 
 /**
@@ -96,16 +96,16 @@ int socket_server_close(ServerSocket *srv)
     
     /* Close clients first */
     for (i = 0; i < SCKT_MAX_CLIENT; i++) {
-        if (srv->clnt_fd[i] == -1) {
+        if (srv->client[i].fd == -1) {
             break;
         }
 
-        if (close(srv->clnt_fd[i])) {
-            SCKT_ERR("Failed to close client socket %d", srv->clnt_fd[i]);
+        if (close(srv->client[i].fd)) {
+            SCKT_ERR("Failed to close client socket %d", srv->client[i].fd);
         }
 
-        srv->clnt_fd[i] = -1;
-        memset(&srv->clnt_addr[i], 0, sizeof(srv->clnt_addr[i]));
+        srv->client[i].fd = -1;
+        memset(&srv->client[i].addr, 0, sizeof(srv->client[i].addr));
     }
 
     if (close(srv->fd)) {
@@ -150,7 +150,7 @@ int socket_client_init(ClientSocket *clnt)
 int socket_client_close(ClientSocket *clnt)
 {
     if (close(clnt->fd)) {
-            SCKT_ERR("Failed to close client socket %d", clnt->fd);
+        SCKT_ERR("Failed to close client socket %d", clnt->fd);
     }
 
     clnt->fd = -1;
@@ -187,6 +187,9 @@ int socket_try_read(socket_t fd, char *buf, int size)
     ret = poll(&fds, 1, 0);
     if (ret == -1) {
         SCKT_ERR("Failed to poll fd %d", fd);
+        return -1;
+    } else if (fds.revents & POLLHUP) {
+        SCKT_INFO("Client already disconnected");
         return -1;
     } else if (ret > 0) {
         return recv(fd, buf, size, 0);

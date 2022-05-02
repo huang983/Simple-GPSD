@@ -55,6 +55,7 @@ typedef struct gpsd_data {
     char rd_buf[GPSD_BUFSIZE]; // buffer to read client's message
     char wr_buf[GPSD_BUFSIZE]; // buffer to send client message
     int show_result; // print parsing result
+    int socket_enable;
     int stop; // set to 1 by CTRL-C
 } GpsdData;
 
