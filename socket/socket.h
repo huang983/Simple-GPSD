@@ -34,7 +34,7 @@ extern int errno;
                                     printf(" (err: %s)\n", strerror(errno)); \
                                 } while(0)
 #ifdef SCKT_DEBUG
-#define GPSD_DBG(format, ...)   do { \
+#define SCKT_DBG(format, ...)   do { \
                                     printf("[Socket][DEBUG][%s][%d] " format, \
                                         __func__, __LINE__, ##__VA_ARGS__); \
                                     printf("\n"); \

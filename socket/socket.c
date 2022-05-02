@@ -175,6 +175,8 @@ int socket_try_read(socket_t fd, char *buf, int size)
         return recv(fd, buf, size, 0);
     }
 
+    SCKT_DBG("Nothing to read");
+
     return 0;
 }
 
@@ -191,10 +193,15 @@ int socket_read(socket_t fd, char *buf, int size)
 
 int socket_write(socket_t fd, char *buf)
 {
-    if (send(fd, buf, strlen(buf), 0) < 0) {
+    int ret;
+
+    ret = send(fd, buf, strlen(buf), 0);
+    if (ret < 0) {
         SCKT_ERR("Socket %d failed to send %s", fd, buf);
         return -1;
     }
 
-    return 0;
+    SCKT_DBG("Successfully write");
+
+    return ret;
 }
