@@ -71,7 +71,8 @@ int device_parse(DeviceInfo *gps_dev)
             DEV_DBG("UBX index: %d", i);
             /* UBX message */
             if ((i + NAV_TIMEGPS_tAcc_OFFSET) >= gps_dev->size) {
-                DEV_ERR("UBX-NAV-TIMEGPS message is incomplete! (size: %d)", gps_dev->size);
+                DEV_ERR("UBX-NAV-TIMEGPS message is incomplete! (i: %d, size: %d)",
+                            i, gps_dev->size);
                 for (j = i; j < gps_dev->size; j++) {
                     printf("0x%X ", gps_dev->buf[j]);
                 }

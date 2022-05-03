@@ -25,7 +25,7 @@
 /* GSA related */
 #define NMEA_GSA_OP_OFFSET      7
 #define NMEA_GSA_NAV_OFFSET     9
-#define NMEA_GSA_SVID_OFFSET    11
+#define NMEA_GSA_SVID_OFFSET    10
 #define NMEA_GSA_MAX_SATELITTES 12
 
 #endif /* NMEA_H */

@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <signal.h>
 
+#include "gps.h"
 #include "../include/client.h"
 #include "../socket/socket.h"
 
@@ -34,16 +35,16 @@ int main(int argc, char **argv)
         state = atoi(buf);
         switch (state) {
             case GPS_NOT_READY:
-                printf("GPS is not ready yet.\n");
+                GPS_INFO("GPS is not ready yet.");
                 break;
             case GPS_POS_FIXED:
-                printf("Position is fixed.\n");
+                GPS_INFO("Position is fixed.");
                 break;
             case GPS_TIME_FIXED:
-                printf("Time is fixed.\n");
+                GPS_INFO("Time is fixed.");
                 break;
             default:
-                printf("Unkown state: %d\n", state);
+                GPS_INFO("Unkown state: %d", state);
                 break;
         }
     }

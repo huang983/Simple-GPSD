@@ -16,7 +16,7 @@ static void usage(void)
     printf("usage: gpsd [OPTIONS] device\n\n\
   Options include: \n\
   -s       = Show time and position-fix status \n\
-  -u       = Create Unix-domain socket\n");
+  -u       = Create Unix-domain socket (e.g. -u /tmp/gpsd.sock)\n");
 }
 
 static int parse_args(int argc, char **argv)
@@ -51,6 +51,7 @@ static int parse_args(int argc, char **argv)
     if (optind >= argc) {
         GPSD_ERR("Please provide device path (optind: %d, argc: %d)",
                     optind, argc);
+        usage();
         return -1;
     }
 
