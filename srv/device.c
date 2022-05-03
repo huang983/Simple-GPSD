@@ -129,15 +129,20 @@ int device_parse(DeviceInfo *gps_dev)
                         gps_dev->mode = POS_FIX_NUM;
                 }
 
-                /* Count number of locked satellites */
+                /* Count number of locked satellites
+                 * TODO: use delimeter instead */
                 j = i + NMEA_GSA_SVID_OFFSET;
                 while (j < gps_dev->size) {
-                    if (gps_dev->buf[j] == ',') {
-                        gps_dev->locked_sat++;
+                    if (gps_dev->locked_sat == NMEA_GSA_MAX_SATELITTES) {
+                        break;
+                    }
 
+                    if (gps_dev->buf[j] == ',') {
                         if (((j + 1) < gps_dev->size) && gps_dev->buf[j + 1] == ',') {
                             break;
                         }
+
+                        gps_dev->locked_sat++;
                     }
 
                     j++;
