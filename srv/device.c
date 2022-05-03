@@ -30,13 +30,6 @@ int device_init(DeviceInfo *gps_dev)
  */
 int device_read(DeviceInfo *gps_dev)
 {
-    static int incomplete_cnt;
-    int retried = 0;
-
-    /* TODO: wait for PPS interrupt first */
-    sleep(1);
-
-read_data:
     /* Read from device */
     if ((gps_dev->size = read(gps_dev->fd, gps_dev->buf, DEV_RD_BUF_SIZE))
             <= 0) {
@@ -44,27 +37,12 @@ read_data:
         return -1;
     }
 
-
     if (gps_dev->buf[gps_dev->size - 2] != 0x0D &&
             gps_dev->buf[gps_dev->size - 1] != 0x0A) {
-        /* Try again */
-        if (!retried) {
-            DEV_INFO("%d incomplete message (size: %d)", incomplete_cnt, gps_dev->size);
-            usleep(200000);
-            retried = 1;
-            incomplete_cnt++;
-            goto read_data;
-        } else {
-            DEV_INFO("Message incomplete!\n%s", gps_dev->buf);
-        }
-    }
-    
-    if (gps_dev->buf[0] != 0xB5) {
-        DEV_INFO("First byte not 0xB5!\n%s", gps_dev->buf);
+        DEV_DBG("Incomplete message");
     }
 
-    DEV_DBG("size: %d", gps_dev->size);
-    DEV_DBG("Message: %s", gps_dev->buf);
+    gps_dev->offset = 0;
 
     return 0;
 }
@@ -85,14 +63,15 @@ int device_parse(DeviceInfo *gps_dev)
     }
 
     /* Reset locked satellites */
+    i = gps_dev->offset;
     gps_dev->locked_sat = 0;
-    DEV_DBG("Start parsing");
+    DEV_DBG("Start parsing (size: %d)", gps_dev->size);
     while (i < gps_dev->size) {
         if (gps_dev->buf[i] == 0xB5) {
-            DEV_DBG("size: %d, i: %d", gps_dev->size, i);
+            DEV_DBG("UBX index: %d", i);
             /* UBX message */
             if ((i + NAV_TIMEGPS_tAcc_OFFSET) >= gps_dev->size) {
-                DEV_ERR("UBX-NAV-TIMEGPS message is incomplete!");
+                DEV_ERR("UBX-NAV-TIMEGPS message is incomplete! (size: %d)", gps_dev->size);
                 for (j = i; j < gps_dev->size; j++) {
                     printf("0x%X ", gps_dev->buf[j]);
                 }
@@ -129,6 +108,7 @@ int device_parse(DeviceInfo *gps_dev)
         } else if (gps_dev->buf[i] == '$') {
             /* NMEA */
             if (strncmp((char *)&gps_dev->buf[i + 3], "GSA", 3) == 0) {
+                DEV_DBG("GSA index: %d", i);
                 DEV_DBG("Talker ID: %.2s, Class: %.3s, Op mode: %c, Nav mode: %c",
                         &gps_dev->buf[i + NMEA_TID_OFFSET], &gps_dev->buf[i + NMEA_CLASS_OFFSET],
                         gps_dev->buf[i + NMEA_GSA_OP_OFFSET], gps_dev->buf[i + NMEA_GSA_NAV_OFFSET]);

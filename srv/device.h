@@ -26,6 +26,7 @@ typedef struct device_info {
     char name[64]; // device name
     uint8_t buf[DEV_RD_BUF_SIZE]; // store read system call result here
     int size; // read size returned by read()
+    int offset; // index of UBX-NAV-TIMEGPS
     /* Below are time-related info extracted from the GPS module */
     PosFixMode mode; 
     uint8_t locked_sat; // number of locked satellites

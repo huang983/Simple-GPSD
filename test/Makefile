@@ -20,6 +20,9 @@ client:
 test_ack:
 	$(CC) $(CFLAGS) test_ack.c $(DEPS) -o $@
 
+test_read:
+	$(CC) $(CFLAGS) test_read.c $(DEPS) -o $@
+
 # Phony means not a "real" target, it doesn't build anything
 # The phony target "clean" is used to remove all compiled object files.
 .PHONY: clean

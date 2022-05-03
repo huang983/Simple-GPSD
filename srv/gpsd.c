@@ -135,6 +135,9 @@ int main(int argc, char **argv)
 
     /* Start here */
     while (!gpsd->stop) {
+        /* TODO: wait for PPS interrupt first */
+        sleep(1);
+        
         if (device_read(gps_dev)) {
             GPSD_ERR("Failed to read GPS device");
         }
@@ -148,6 +151,7 @@ int main(int argc, char **argv)
                         gps_dev->iTOW, gps_dev->week, gps_dev->leap_sec, gps_dev->valid,
                         gps_dev->mode, gps_dev->locked_sat);
         }
+
 
         if (gpsd->socket_enable) {
             if (srv->client[0].fd == -1) {
