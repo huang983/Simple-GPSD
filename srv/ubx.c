@@ -48,15 +48,15 @@ static void check_sum(UbxMsg *ubx_msg)
  */
 static int wait_for_ack(int fd, uint8_t class, uint8_t id)
 {
-#define WAIT_ACK_BUF_SZ 256
+#define WAIT_ACK_BUF_SZ 1024
 #define ACK_MSG_LEN 10
     uint8_t buf[WAIT_ACK_BUF_SZ];
     uint8_t ack_msg[ACK_MSG_LEN] = { UBX_SYNC1, UBX_SYNC2, UBX_CLASS_ACK, UBX_ACK_ACK,
                                      0x02, 0x00, 0x00, 0x00, 0x00, 0x00 }; // skip checksum
     int size = 0;
-    int ack_msg_recv = 0; // # of bytes received
     int cnt = 0; // return -1 if read more than 5 times
     int i = 0;
+    int j = 0;
 
     /* Assign class, ID, and checksum */
     ack_msg[6] = class;
@@ -67,48 +67,48 @@ static int wait_for_ack(int fd, uint8_t class, uint8_t id)
         ack_msg[9] += ack_msg[8];
     }
 
-    while (ack_msg_recv < ACK_MSG_LEN) {
-        if (cnt == 5) {
-            UBX_ERR("Failed to get ACK message! (bytes received: %d)",
-                     ack_msg_recv);
+    while (1) {
+        if (cnt == 6) {
+            UBX_ERR("Failed to get ACK message!");
             return -1;
         }
-
+        
         usleep(500000);
 
         size = read(fd, buf, WAIT_ACK_BUF_SZ);
         if (size <= 0) {
-            continue;
-        } else if (ack_msg_recv > 0) {
-            /* Use multiple reads to get a complete UBX message */
-            i = 0;
-            goto parse_ack_msg;
+            UBX_ERR("Read failed! (cnt: %d)", cnt);
+            goto upd_cnt;
         }
 
         for (i = 0; i < size; i++) {
-            if (buf[i] == UBX_SYNC1) {
+            if ((size - i) < UBX_ACK_MSG_LEN) {
+                /* Didn't receive complete message */
                 break;
             }
-        }
 
-parse_ack_msg:
-        while (i < size && ack_msg_recv < ACK_MSG_LEN) {
-            if (buf[i] != ack_msg[ack_msg_recv]) {
-                UBX_ERR("buf[%d]: 0x%0X, ack_msg[%d]: 0x%08X",
-                         i, buf[i], ack_msg_recv, ack_msg[ack_msg_recv]);
-                return -1;
+            if (buf[i] == ack_msg[0]) {
+                for (j = i; j < (i + UBX_ACK_MSG_LEN); j++) {
+                    if (buf[j] != ack_msg[j - i]) {
+                        if (j == UBX_IDX_ID && buf[j] == UBX_ACK_NAK) {
+                            UBX_ERR("NAK was received!");
+                        }
+                        break;
+                    }
+                }
+
+                if (j == (i + UBX_ACK_MSG_LEN)) {
+                    /* return 0 on scucess if all matched */
+                    UBX_INFO("Successfuly get ACK message for class 0x%X and ID 0x%X!", class, id);
+                    return 0;
+                }
             }
-
-            i++;
-            ack_msg_recv++;
         }
-
+upd_cnt:
         cnt++;
     }
 
-    UBX_INFO("Successfuly get ACK message!");
-
-    return 0;
+    return -1;
 }
 
 /** 

@@ -40,8 +40,10 @@
 /* UBX-ACK related */
 #define UBX_ACK_ACK                 0x01
 #define UBX_ACK_NAK                 0x00
+#define UBX_ACK_MSG_LEN             10
 
 /* UBX-NAV-TIMEGPS related */
+#define NAV_TIMEGPS_MSG_LEN         24
 #define NAV_TIMEGPS_iTOW_OFFSET     6
 #define NAV_TIMEGPS_fTOW_OFFSET     10
 #define NAV_TIMEGPS_WEEK_OFFSET     14

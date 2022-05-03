@@ -30,16 +30,39 @@ int device_init(DeviceInfo *gps_dev)
  */
 int device_read(DeviceInfo *gps_dev)
 {
+    static int incomplete_cnt;
+    int retried = 0;
+
     /* TODO: wait for PPS interrupt first */
     sleep(1);
 
+read_data:
     /* Read from device */
     if ((gps_dev->size = read(gps_dev->fd, gps_dev->buf, DEV_RD_BUF_SIZE))
             <= 0) {
         DEV_ERR("Failed to read %s (size: %d)", gps_dev->name, gps_dev->size);
         return -1;
     }
+
+
+    if (gps_dev->buf[gps_dev->size - 2] != 0x0D &&
+            gps_dev->buf[gps_dev->size - 1] != 0x0A) {
+        /* Try again */
+        if (!retried) {
+            DEV_INFO("%d incomplete message (size: %d)", incomplete_cnt, gps_dev->size);
+            usleep(200000);
+            retried = 1;
+            incomplete_cnt++;
+            goto read_data;
+        } else {
+            DEV_INFO("Message incomplete!\n%s", gps_dev->buf);
+        }
+    }
     
+    if (gps_dev->buf[0] != 0xB5) {
+        DEV_INFO("First byte not 0xB5!\n%s", gps_dev->buf);
+    }
+
     DEV_DBG("size: %d", gps_dev->size);
     DEV_DBG("Message: %s", gps_dev->buf);
 
@@ -63,9 +86,10 @@ int device_parse(DeviceInfo *gps_dev)
 
     /* Reset locked satellites */
     gps_dev->locked_sat = 0;
-
+    DEV_DBG("Start parsing");
     while (i < gps_dev->size) {
         if (gps_dev->buf[i] == 0xB5) {
+            DEV_DBG("size: %d, i: %d", gps_dev->size, i);
             /* UBX message */
             if ((i + NAV_TIMEGPS_tAcc_OFFSET) >= gps_dev->size) {
                 DEV_ERR("UBX-NAV-TIMEGPS message is incomplete!");
@@ -97,6 +121,7 @@ int device_parse(DeviceInfo *gps_dev)
                     gps_dev->leap_sec = gps_dev->buf[i + NAV_TIMEGPS_LEAP_OFFSET];
                     gps_dev->valid = gps_dev->buf[i + NAV_TIMEGPS_VALID_OFFSET];
                     gps_dev->tAcc = gps_dev->buf[i + NAV_TIMEGPS_tAcc_OFFSET];
+                    DEV_DBG("iTOW: %u", gps_dev->iTOW);
                 } else {
                     DEV_ERR("UBX-NAV-TIMEGPS not valid! (valid: 0x%08X)", gps_dev->buf[i + NAV_TIMEGPS_VALID_OFFSET]);
                 }
@@ -137,11 +162,14 @@ int device_parse(DeviceInfo *gps_dev)
 
                     j++;
                 }
+            } else if (strncmp((char *)&gps_dev->buf[i + 3], "GNS", 3) == 0) {
+                DEV_DBG("%s", &gps_dev->buf[i]);
             }
         }
 
         i++;
     }
+    DEV_DBG("Parsing done");
 
     return 0;
 }

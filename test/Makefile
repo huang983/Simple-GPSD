@@ -5,7 +5,7 @@ CC := $(CROSS_COMPILE)gcc
 #  LDFLAGS = -lm
 
 SRCS = $(wildcard *.c)
-DEPS = $(wildcard ../socket/*.c)
+DEPS = $(wildcard ../socket/*.c ../srv/device.c ../srv/ubx.c)
 TARGETS = $(patsubst %.c,%,$(SRCS))
 override CFLAGS += -Wall
 
@@ -16,6 +16,9 @@ srv:
 
 client:
 	$(CC) $(CFLAGS) test_socket_clnt.c $(DEPS) -o $@
+
+test_ack:
+	$(CC) $(CFLAGS) test_ack.c $(DEPS) -o $@
 
 # Phony means not a "real" target, it doesn't build anything
 # The phony target "clean" is used to remove all compiled object files.

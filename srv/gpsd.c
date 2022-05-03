@@ -91,23 +91,33 @@ int main(int argc, char **argv)
     }
 
     /* Poll UBX-NAV-TIMETGPS once per second */
+    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_GSV, UBX_CFG_MSG_OFF)) {
+        GPSD_ERR("Failed to set GSV message rate");
+        goto close_device;
+    }
+
+    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_GLL, UBX_CFG_MSG_OFF)) {
+        GPSD_ERR("Failed to set GLL message rate");
+        goto close_device;
+    }
+
+    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_ZDA, UBX_CFG_MSG_OFF)) {
+        GPSD_ERR("Failed to set ZDA message rate");
+        goto close_device;
+    }
+
     if (ubx_set_msg_rate(gps_dev->fd, UBX_CLASS_NAV, UBX_ID_NAV_TIMEGPS, UBX_CFG_MSG_ON)) {
         GPSD_ERR("Failed to set UBX-NAV-TIMETGPS message rate");
         goto close_device;
     }
 
-    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_GSV, UBX_CFG_MSG_OFF)) {
-        GPSD_ERR("Failed to set UBX-NAV-TIMETGPS message rate");
+    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_GSA, UBX_CFG_MSG_ON)) {
+        GPSD_ERR("Failed to set GSA message rate");
         goto close_device;
     }
 
-    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_GLL, UBX_CFG_MSG_OFF)) {
-        GPSD_ERR("Failed to set UBX-NAV-TIMETGPS message rate");
-        goto close_device;
-    }
-
-    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_ZDA, UBX_CFG_MSG_OFF)) {
-        GPSD_ERR("Failed to set UBX-NAV-TIMETGPS message rate");
+    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_GNS, UBX_CFG_MSG_ON)) {
+        GPSD_ERR("Failed to set GNS message rate");
         goto close_device;
     }
 
@@ -119,7 +129,6 @@ int main(int argc, char **argv)
 
         GPSD_INFO("Socket setup is successful");
     }
-
 
     /* Stop the program by CTRL+C */
     signal(SIGINT, sig_handler);
