@@ -44,6 +44,7 @@
 
 /* UBX-NAV-TIMEGPS related */
 #define NAV_TIMEGPS_MSG_LEN         24
+#define NAV_TIMEGPS_VALID           7
 #define NAV_TIMEGPS_iTOW_OFFSET     6
 #define NAV_TIMEGPS_fTOW_OFFSET     10
 #define NAV_TIMEGPS_WEEK_OFFSET     14

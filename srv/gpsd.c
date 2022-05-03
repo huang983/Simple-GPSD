@@ -11,20 +11,12 @@ void sig_handler(int sig)
     gpsd->stop = 1;
 }
 
-static void __attribute__((unused)) test_log()
-{
-    GPSD_INFO("Hello %d + %d = %d", 1, 1, (1 + 1));
-    GPSD_ERR("Hello %d", 2);
-    GPSD_DBG("Hello%s", ", I'm Tim :)");
-}
-
 static void usage(void)
 {
     printf("usage: gpsd [OPTIONS] device\n\n\
   Options include: \n\
   -s       = Show time and position-fix status \n\
   -u       = Create Unix-domain socket\n");
-
 }
 
 static int parse_args(int argc, char **argv)
@@ -137,7 +129,7 @@ int main(int argc, char **argv)
     while (!gpsd->stop) {
         /* TODO: wait for PPS interrupt first */
         sleep(1);
-        
+
         if (device_read(gps_dev)) {
             GPSD_ERR("Failed to read GPS device");
         }
@@ -152,7 +144,6 @@ int main(int argc, char **argv)
                         gps_dev->mode, gps_dev->locked_sat);
         }
 
-
         if (gpsd->socket_enable) {
             if (srv->client[0].fd == -1) {
                 /* No client connection yet */
@@ -163,10 +154,19 @@ int main(int argc, char **argv)
                 ret = socket_try_read(srv->client[0].fd, gpsd->rd_buf, GPSD_BUFSIZE);
                 if (ret > 0) {
                     /* TODO: parse client's query and send back the corresponding result */
-                    char res[5];
+                    char msg[5];
 
-                    sprintf(res, "%d", gps_dev->mode);
-                    if (socket_write(srv->client[0].fd, res) <= 0) {
+                    if (gps_dev->locked_sat >= 4 &&
+                                gps_dev->valid & NAV_TIMEGPS_VALID) {
+                        sprintf(msg, "%d", GPS_TIME_FIXED);
+                    } else if (gps_dev->locked_sat >= 4) {
+                        sprintf(msg, "%d", GPS_POS_FIXED);
+                    } else {
+                        /* gps_dev->mode == NO_POS_FIX */
+                        sprintf(msg, "%d", GPS_NOT_READY);
+                    }
+
+                    if (socket_write(srv->client[0].fd, msg) <= 0) {
                         GPSD_ERR("Failed to send to client %d", srv->client[0].fd);
                     }
                 } else if (ret < 0) {

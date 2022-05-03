@@ -1,26 +1,54 @@
-#include "gps.h"
-#include "../include/define.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdint.h>
+#include <signal.h>
+
 #include "../include/client.h"
+#include "../socket/socket.h"
+
+int stop = 0;
+
+void handler(int sig)
+{
+    stop = 1;
+}
 
 int main(int argc, char **argv)
 {
-    int clnt_fd = 0;
-    struct sockaddr_un clnt_addr;
+    ClientSocket clnt;
+    int state;
+    char buf[512];
+    int size = 0;
 
-    if ((clnt_fd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
-        GPS_ERR("Failed to create a socket");
+    signal(SIGINT, handler);
+
+    socket_client_init(&clnt);
+
+    while (!stop) {
+        socket_write(clnt.fd, "GpsState?");
+
+        size = socket_read(clnt.fd, buf, 512);
+        buf[size] = 0;
+
+        state = atoi(buf);
+        switch (state) {
+            case GPS_NOT_READY:
+                printf("GPS is not ready yet.\n");
+                break;
+            case GPS_POS_FIXED:
+                printf("Position is fixed.\n");
+                break;
+            case GPS_TIME_FIXED:
+                printf("Time is fixed.\n");
+                break;
+            default:
+                printf("Unkown state: %d\n", state);
+                break;
+        }
     }
 
-    GPS_INFO("Socket %d created", clnt_fd);
-
-    clnt_addr.sun_family = AF_UNIX;
-    strncpy(clnt_addr.sun_path, GPSD_UDS_FILE, sizeof(clnt_addr.sun_path));
-    if (connect(clnt_fd, (struct sockaddr*)&clnt_addr, sizeof(clnt_addr)) < 0) {
-        GPS_ERR("Failed to connect to %s", GPSD_UDS_FILE);
-        exit(0);
-    }
-
-    GPS_INFO("Client connected!");
+    socket_client_close(&clnt);
 
     return 0;
 }
