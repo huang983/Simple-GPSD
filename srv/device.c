@@ -8,16 +8,23 @@
  * @param name path of the device
  * @return int 
  */
-int device_init(DeviceInfo *gps_dev)
+int device_init(DeviceInfo *gps_dev, int log_lvl)
 {
+    /* Set log level */
+    gps_dev->log_lvl = log_lvl;
+
     /* Open the device */
     gps_dev->fd = open(gps_dev->name, O_RDWR);
     if (gps_dev->fd == -1) {
-        DEV_ERR("[%s] Cannot open %s\n", __FILE__, gps_dev->name);
+        DEV_ERR(gps_dev->log_lvl, "[%s] Cannot open %s\n", __FILE__, gps_dev->name);
         return -1;
     }
 
-    DEV_INFO("Successfully opened %s", gps_dev->name);
+    // if (ioctl(gps_dev->fd, 26368)) {
+    //     DEV_ERR(gps_dev->log_lvl, "Failed to call ioctl!");
+    // }
+
+    DEV_INFO(gps_dev->log_lvl, "Successfully opened %s", gps_dev->name);
 
     return 0;
 }
@@ -33,13 +40,13 @@ int device_read(DeviceInfo *gps_dev)
     /* Read from device */
     if ((gps_dev->size = read(gps_dev->fd, gps_dev->buf, DEV_RD_BUF_SIZE))
             <= 0) {
-        DEV_ERR("Failed to read %s (size: %d)", gps_dev->name, gps_dev->size);
+        DEV_ERR(gps_dev->log_lvl, "Failed to read %s (size: %d)", gps_dev->name, gps_dev->size);
         return -1;
     }
 
     if (gps_dev->buf[gps_dev->size - 2] != 0x0D &&
             gps_dev->buf[gps_dev->size - 1] != 0x0A) {
-        DEV_DBG("Incomplete message");
+        DEV_DBG(gps_dev->log_lvl, "Incomplete message");
     }
 
     gps_dev->offset = 0;
@@ -59,19 +66,19 @@ int device_parse(DeviceInfo *gps_dev)
     int j = 0;
 
     if (gps_dev->size <= 0) {
-        DEV_ERR("Size is %d. Nothing to parse!", gps_dev->size);
+        DEV_ERR(gps_dev->log_lvl, "Size is %d. Nothing to parse!", gps_dev->size);
     }
 
     /* Reset locked satellites */
     i = gps_dev->offset;
     gps_dev->locked_sat = 0;
-    DEV_DBG("Start parsing (size: %d)", gps_dev->size);
+    DEV_DBG(gps_dev->log_lvl, "Start parsing (size: %d)", gps_dev->size);
     while (i < gps_dev->size) {
         if (gps_dev->buf[i] == 0xB5) {
-            DEV_DBG("UBX index: %d", i);
+            DEV_DBG(gps_dev->log_lvl, "UBX index: %d", i);
             /* UBX message */
             if ((i + NAV_TIMEGPS_tAcc_OFFSET) >= gps_dev->size) {
-                DEV_ERR("UBX-NAV-TIMEGPS message is incomplete! (i: %d, size: %d)",
+                DEV_ERR(gps_dev->log_lvl, "UBX-NAV-TIMEGPS message is incomplete! (i: %d, size: %d)",
                             i, gps_dev->size);
                 for (j = i; j < gps_dev->size; j++) {
                     printf("0x%X ", gps_dev->buf[j]);
@@ -101,19 +108,19 @@ int device_parse(DeviceInfo *gps_dev)
                     gps_dev->leap_sec = gps_dev->buf[i + NAV_TIMEGPS_LEAP_OFFSET];
                     gps_dev->valid = gps_dev->buf[i + NAV_TIMEGPS_VALID_OFFSET];
                     gps_dev->tAcc = gps_dev->buf[i + NAV_TIMEGPS_tAcc_OFFSET];
-                    DEV_DBG("iTOW: %u", gps_dev->iTOW);
+                    DEV_DBG(gps_dev->log_lvl, "iTOW: %u", gps_dev->iTOW);
                 } else {
-                    DEV_ERR("UBX-NAV-TIMEGPS not valid! (valid: 0x%08X)", gps_dev->buf[i + NAV_TIMEGPS_VALID_OFFSET]);
+                    DEV_ERR(gps_dev->log_lvl, "UBX-NAV-TIMEGPS not valid! (valid: 0x%08X)", gps_dev->buf[i + NAV_TIMEGPS_VALID_OFFSET]);
                 }
             }
         } else if (gps_dev->buf[i] == '$') {
             /* NMEA */
             if (strncmp((char *)&gps_dev->buf[i + 3], "GSA", 3) == 0) {
-                DEV_DBG("GSA index: %d", i);
-                DEV_DBG("Talker ID: %.2s, Class: %.3s, Op mode: %c, Nav mode: %c",
+                DEV_DBG(gps_dev->log_lvl, "GSA index: %d", i);
+                DEV_DBG(gps_dev->log_lvl, "Talker ID: %.2s, Class: %.3s, Op mode: %c, Nav mode: %c",
                         &gps_dev->buf[i + NMEA_TID_OFFSET], &gps_dev->buf[i + NMEA_CLASS_OFFSET],
                         gps_dev->buf[i + NMEA_GSA_OP_OFFSET], gps_dev->buf[i + NMEA_GSA_NAV_OFFSET]);
-                DEV_DBG("SVID: %.36s", &gps_dev->buf[i + NMEA_GSA_SVID_OFFSET]);
+                DEV_DBG(gps_dev->log_lvl, "SVID: %.36s", &gps_dev->buf[i + NMEA_GSA_SVID_OFFSET]);
                 
                 /* Get position fix mode */
                 switch (gps_dev->buf[i + NMEA_GSA_NAV_OFFSET]) {
@@ -149,13 +156,13 @@ int device_parse(DeviceInfo *gps_dev)
                     j++;
                 }
             } else if (strncmp((char *)&gps_dev->buf[i + 3], "GNS", 3) == 0) {
-                DEV_DBG("%s", &gps_dev->buf[i]);
+                DEV_DBG(gps_dev->log_lvl, "%s", &gps_dev->buf[i]);
             }
         }
 
         i++;
     }
-    DEV_DBG("Parsing done");
+    DEV_DBG(gps_dev->log_lvl, "Parsing done");
 
     return 0;
 }
@@ -169,13 +176,13 @@ int device_parse(DeviceInfo *gps_dev)
 int device_close(DeviceInfo *gps_dev)
 {
     if (close(gps_dev->fd) < 0) {
-        DEV_ERR("Failed to close %s w/ file descriptor = %d", gps_dev->name, gps_dev->fd);
+        DEV_ERR(gps_dev->log_lvl, "Failed to close %s w/ file descriptor = %d", gps_dev->name, gps_dev->fd);
         return -1;
     }
 
     gps_dev->fd = -1;
 
-    DEV_INFO("Closed device %s", gps_dev->name);
+    DEV_INFO(gps_dev->log_lvl, "Closed device %s", gps_dev->name);
 
     return 0;
 }

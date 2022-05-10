@@ -28,26 +28,31 @@ extern int errno;
 #define GPSD_RET_SUCCESS        0
 #define GPSD_RET_FAILED         -1
 
-#define GPSD_INFO(format, ...)  do { \
-                                    printf("[GPSD][INFO] " format, ##__VA_ARGS__); \
-                                    printf("\n"); \
+#define GPSD_INFO_LVL 1
+#define GPSD_INFO(lvl, format, ...)  do { \
+                                    if (lvl >= GPSD_INFO_LVL) { \
+                                        printf("[GPSD][INFO] " format, ##__VA_ARGS__); \
+                                        printf("\n"); \
+                                    } \
                                 } while(0)
 
 // TODO: use perror instead()
-#define GPSD_ERR(format, ...)   do { \
-                                    printf("[GPSD][ERROR][%s][%d] " format, \
-                                        __func__, __LINE__, ##__VA_ARGS__); \
-                                    printf(" (err: %s)\n", strerror(errno)); \
+#define GPSD_ERR_LVL 2
+#define GPSD_ERR(lvl, format, ...)   do { \
+                                    if (lvl >= GPSD_ERR_LVL) { \
+                                        printf("[GPSD][ERROR][%s][%d] " format, \
+                                            __func__, __LINE__, ##__VA_ARGS__); \
+                                        printf(" (err: %s)\n", strerror(errno)); \
+                                    } \
                                 } while(0)
-#ifdef GPSD_DEBUG
-#define GPSD_DBG(format, ...)   do { \
-                                    printf("[GPSD][DEBUG][%s][%d] " format, \
-                                        __func__, __LINE__, ##__VA_ARGS__); \
-                                    printf("\n"); \
+#define GPSD_DBG_LVL 4
+#define GPSD_DBG(lvl, format, ...)   do { \
+                                    if (lvl >= GPSD_DBG_LVL) { \
+                                        printf("[GPSD][DEBUG][%s][%d] " format, \
+                                            __func__, __LINE__, ##__VA_ARGS__); \
+                                        printf("\n"); \
+                                    } \
                                 } while (0)
-#else
-#define GPSD_DBG(format, ...)
-#endif // GPSD_DEBUG
 
 typedef struct gpsd_data {
     DeviceInfo gps_dev;
@@ -55,6 +60,7 @@ typedef struct gpsd_data {
     char rd_buf[GPSD_BUFSIZE]; // buffer to read client's message
     char wr_buf[GPSD_BUFSIZE]; // buffer to send client message
     int show_result; // print parsing result
+    int log_lvl;
     int socket_enable;
     int stop; // set to 1 by CTRL-C
 } GpsdData;

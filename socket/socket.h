@@ -24,25 +24,31 @@
 typedef int socket_t;
 extern int errno;
 
-#define SCKT_INFO(format, ...)  do { \
-                                    printf("[Socket][INFO] " format, ##__VA_ARGS__); \
-                                    printf("\n"); \
+#define SCKT_INFO_LVL 1
+#define SCKT_INFO(lvl, format, ...)  do { \
+                                    if (lvl >= SCKT_INFO_LVL) { \
+                                        printf("[SCKT][INFO] " format, ##__VA_ARGS__); \
+                                        printf("\n"); \
+                                    } \
                                 } while(0)
 
-#define SCKT_ERR(format, ...)   do { \
-                                    printf("[Socket][ERROR][%s][%d] " format, \
-                                        __func__, __LINE__, ##__VA_ARGS__); \
-                                    printf(" (err: %s)\n", strerror(errno)); \
+// TODO: use perror instead()
+#define SCKT_ERR_LVL 2
+#define SCKT_ERR(lvl, format, ...)   do { \
+                                    if (lvl >= SCKT_ERR_LVL) { \
+                                        printf("[SCKT][ERROR][%s][%d] " format, \
+                                            __func__, __LINE__, ##__VA_ARGS__); \
+                                        printf(" (err: %s)\n", strerror(errno)); \
+                                    } \
                                 } while(0)
-#ifdef SCKT_DEBUG
-#define SCKT_DBG(format, ...)   do { \
-                                    printf("[Socket][DEBUG][%s][%d] " format, \
-                                        __func__, __LINE__, ##__VA_ARGS__); \
-                                    printf("\n"); \
+#define SCKT_DBG_LVL 4
+#define SCKT_DBG(lvl, format, ...)   do { \
+                                    if (lvl >= SCKT_DBG_LVL) { \
+                                        printf("[SCKT][DEBUG][%s][%d] " format, \
+                                            __func__, __LINE__, ##__VA_ARGS__); \
+                                        printf("\n"); \
+                                    } \
                                 } while (0)
-#else
-#define SCKT_DBG(format, ...)
-#endif // SCKT_DEBUG
 
 typedef struct client_socket {
     socket_t fd;
@@ -58,7 +64,7 @@ typedef struct server_socket {
     char socket_file[64];
 } ServerSocket;
 
-int socket_server_init(ServerSocket *srv);
+int socket_server_init(ServerSocket *srv, int log_lvl);
 int socket_server_close(ServerSocket *srv);
 int socket_client_init(ClientSocket *clnt);
 int socket_server_try_accept(ServerSocket *srv);

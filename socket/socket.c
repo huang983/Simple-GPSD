@@ -1,15 +1,20 @@
 #include "socket.h"
 
+static int srv_log_lvl;
+
 /**
  * @brief Initialize Unix-domain socket
  * 
  * @return int 
  */
-int socket_server_init(ServerSocket *srv)
+int socket_server_init(ServerSocket *srv, int log_lvl)
 {
     int i;
 
     memset(srv, 0, sizeof(*srv));
+
+    /* Set log level */
+    srv_log_lvl = log_lvl;
 
     /* Set socket file name */
     strncpy(srv->socket_file, SCKT_FILE, sizeof(srv->socket_file));
@@ -18,7 +23,7 @@ int socket_server_init(ServerSocket *srv)
     srv->fd = socket(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK, 0);
     if (srv->fd < 0)
     {
-        SCKT_ERR("Failed to create socket");
+        SCKT_ERR(srv_log_lvl, "Failed to create socket");
         return -1;
     }
 
@@ -28,17 +33,17 @@ int socket_server_init(ServerSocket *srv)
 
     /* Assign a name to the socket */
     if (bind(srv->fd, (struct sockaddr*)&srv->addr, sizeof(srv->addr))) {
-        SCKT_ERR("Failed to bind");
+        SCKT_ERR(srv_log_lvl, "Failed to bind");
         return -1;
     }
 
     /* Mark the socket as a passive socket to accept incoming connection requests */
     if (listen(srv->fd, SCKT_MAX_CLIENT)) {
-        SCKT_ERR("Failed to listen");
+        SCKT_ERR(srv_log_lvl, "Failed to listen");
         return -1;
     }
 
-    SCKT_INFO("Unix-domain socket created w/ %s and max client of %d",
+    SCKT_INFO(srv_log_lvl, "Unix-domain socket created w/ %s and max client of %d",
                 srv->socket_file, SCKT_MAX_CLIENT);
 
 #if 0 // decide whether to use SIGIO or not later
@@ -59,9 +64,9 @@ int socket_server_init(ServerSocket *srv)
     }
 
     if (socket_server_try_accept(srv) < 0) {
-        SCKT_INFO("No client connection yet!");
+        SCKT_INFO(srv_log_lvl, "No client connection yet!");
     } else {
-        SCKT_INFO("Connection w/ cllient %d established", srv->client[i].fd);
+        SCKT_INFO(srv_log_lvl, "Connection w/ cllient %d established", srv->client[i].fd);
     }
 
     return 0;
@@ -101,7 +106,7 @@ int socket_server_close(ServerSocket *srv)
         }
 
         if (close(srv->client[i].fd)) {
-            SCKT_ERR("Failed to close client socket %d", srv->client[i].fd);
+            SCKT_ERR(srv_log_lvl, "Failed to close client socket %d", srv->client[i].fd);
         }
 
         srv->client[i].fd = -1;
@@ -109,7 +114,7 @@ int socket_server_close(ServerSocket *srv)
     }
 
     if (close(srv->fd)) {
-        SCKT_ERR("Failed to close socket %d", srv->fd);
+        SCKT_ERR(srv_log_lvl, "Failed to close socket %d", srv->fd);
         return -1;
     }
 
@@ -117,7 +122,7 @@ int socket_server_close(ServerSocket *srv)
     srv->fd = -1;
     memset(&srv->addr, 0, sizeof(srv->addr));
 
-    SCKT_INFO("Successfully closed server");
+    SCKT_INFO(srv_log_lvl, "Successfully closed server");
 
     return 0;
 }
@@ -132,17 +137,17 @@ int socket_client_init(ClientSocket *clnt)
 
     /* Create a socket for client */
     if ((clnt->fd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
-        SCKT_ERR("Failed to create client socket");
+        SCKT_ERR(srv_log_lvl, "Failed to create client socket");
         return -1;
     }
 
     /* Connect w/ server */
     if (connect(clnt->fd, (struct sockaddr*)&clnt->addr, sizeof(clnt->addr))) {
-        SCKT_ERR("Failed to connect to %s", clnt->addr.sun_path);
+        SCKT_ERR(srv_log_lvl, "Failed to connect to %s", clnt->addr.sun_path);
         return -1;
     }
 
-    SCKT_INFO("Successfully connected to %s", clnt->addr.sun_path);
+    SCKT_INFO(srv_log_lvl, "Successfully connected to %s", clnt->addr.sun_path);
 
     return 0;
 }
@@ -150,13 +155,13 @@ int socket_client_init(ClientSocket *clnt)
 int socket_client_close(ClientSocket *clnt)
 {
     if (close(clnt->fd)) {
-        SCKT_ERR("Failed to close client socket %d", clnt->fd);
+        SCKT_ERR(srv_log_lvl, "Failed to close client socket %d", clnt->fd);
     }
 
     clnt->fd = -1;
     memset(&clnt->addr, 0, sizeof(clnt->addr));
 
-    SCKT_INFO("Successfully closed client");
+    SCKT_INFO(srv_log_lvl, "Successfully closed client");
 
     return 0;
 }
@@ -176,7 +181,7 @@ int socket_try_read(socket_t fd, char *buf, int size)
 
     /* Validate fd */
     if (fd < 0) {
-        SCKT_ERR("Invalid fd %d", fd);
+        SCKT_ERR(srv_log_lvl, "Invalid fd %d", fd);
         return -1;
     }
 
@@ -186,16 +191,16 @@ int socket_try_read(socket_t fd, char *buf, int size)
     fds.events = POLLIN;
     ret = poll(&fds, 1, 0);
     if (ret == -1) {
-        SCKT_ERR("Failed to poll fd %d", fd);
+        SCKT_ERR(srv_log_lvl, "Failed to poll fd %d", fd);
         return -1;
     } else if (fds.revents & POLLHUP) {
-        SCKT_INFO("Client already disconnected");
+        SCKT_INFO(srv_log_lvl, "Client already disconnected");
         return -1;
     } else if (ret > 0) {
         return recv(fd, buf, size, 0);
     }
 
-    SCKT_DBG("Nothing to read (revents: %d)", fds.revents);
+    SCKT_DBG(srv_log_lvl, "Nothing to read (revents: %d)", fds.revents);
 
     return 0;
 }
@@ -217,11 +222,11 @@ int socket_write(socket_t fd, char *buf)
 
     ret = send(fd, buf, strlen(buf), 0);
     if (ret < 0) {
-        SCKT_ERR("Socket %d failed to send %s", fd, buf);
+        SCKT_ERR(srv_log_lvl, "Socket %d failed to send %s", fd, buf);
         return -1;
     }
 
-    SCKT_DBG("Successfully write");
+    SCKT_DBG(srv_log_lvl, "Successfully write");
 
     return ret;
 }

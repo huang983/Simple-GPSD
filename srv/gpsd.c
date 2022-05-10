@@ -16,7 +16,8 @@ static void usage(void)
     printf("usage: gpsd [OPTIONS] device\n\n\
   Options include: \n\
   -s       = Show time and position-fix status \n\
-  -u       = Create Unix-domain socket (e.g. -u /tmp/gpsd.sock)\n");
+  -u       = Create Unix-domain socket (e.g. -u /tmp/gpsd.sock)\n\
+  -d       = Set log level - 0: turn off all, 1: info, 2: error, 4: debug\n");
 }
 
 static int parse_args(int argc, char **argv)
@@ -24,8 +25,11 @@ static int parse_args(int argc, char **argv)
     GpsdData *gpsd = &g_gpsd_data;
     DeviceInfo *gps_dev = &gpsd->gps_dev;
     // ServerSocket *srv = &gpsd->srv;
-    const char *optstr = "su:";
+    const char *optstr = "su:d:";
     int ch;
+
+    /* Deault log level to 2 */
+    gpsd->log_lvl = 2;
 
     /* Parse options */
     while ((ch = getopt(argc, argv, optstr)) != -1) {
@@ -39,7 +43,10 @@ static int parse_args(int argc, char **argv)
                 gpsd->socket_enable = 1;
                 /* Hardcode socket file for now */
                 // strncpy(srv->addr.sun_path, optarg, strlen(optarg));
-                // GPSD_INFO("Socket file: %s", srv->addr.sun_path);
+                // GPSD_INFO(gpsd->log_lvl, "Socket file: %s", srv->addr.sun_path);
+                break;
+            case 'd':
+                gpsd->log_lvl = atoi(optarg);
                 break;
             default:
                 usage();
@@ -49,13 +56,13 @@ static int parse_args(int argc, char **argv)
 
     /* Get device name */
     if (optind >= argc) {
-        GPSD_ERR("Please provide device path (optind: %d, argc: %d)",
+        GPSD_ERR(gpsd->log_lvl, "Please provide device path (optind: %d, argc: %d)",
                     optind, argc);
         usage();
         return -1;
     }
 
-    GPSD_DBG("Device: %s, size: %ld", argv[optind], sizeof(gps_dev->name));
+    GPSD_DBG(gpsd->log_lvl, "Device: %s, size: %ld", argv[optind], sizeof(gps_dev->name));
     strncpy(gps_dev->name, argv[optind], sizeof(gps_dev->name));
 
     return 0;
@@ -73,54 +80,54 @@ int main(int argc, char **argv)
 
     /* Parse command-line options */
     if (parse_args(argc, argv)) {
-        GPSD_ERR("Parsing failed. Exiting program!");
+        GPSD_ERR(gpsd->log_lvl, "Parsing failed. Exiting program!");
         exit(0);
     }
 
     /* Initialize GPS device */
-    GPSD_DBG("Device: %s", gps_dev->name);
-    if (device_init(gps_dev)) {
+    GPSD_DBG(gpsd->log_lvl, "Device: %s", gps_dev->name);
+    if (device_init(gps_dev, gpsd->log_lvl)) {
         exit(0);
     }
 
     /* Poll UBX-NAV-TIMETGPS once per second */
     if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_GSV, UBX_CFG_MSG_OFF)) {
-        GPSD_ERR("Failed to set GSV message rate");
+        GPSD_ERR(gpsd->log_lvl, "Failed to set GSV message rate");
         goto close_device;
     }
 
     if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_GLL, UBX_CFG_MSG_OFF)) {
-        GPSD_ERR("Failed to set GLL message rate");
+        GPSD_ERR(gpsd->log_lvl, "Failed to set GLL message rate");
         goto close_device;
     }
 
     if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_ZDA, UBX_CFG_MSG_OFF)) {
-        GPSD_ERR("Failed to set ZDA message rate");
+        GPSD_ERR(gpsd->log_lvl, "Failed to set ZDA message rate");
         goto close_device;
     }
 
     if (ubx_set_msg_rate(gps_dev->fd, UBX_CLASS_NAV, UBX_ID_NAV_TIMEGPS, UBX_CFG_MSG_ON)) {
-        GPSD_ERR("Failed to set UBX-NAV-TIMETGPS message rate");
+        GPSD_ERR(gpsd->log_lvl, "Failed to set UBX-NAV-TIMETGPS message rate");
         goto close_device;
     }
 
     if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_GSA, UBX_CFG_MSG_ON)) {
-        GPSD_ERR("Failed to set GSA message rate");
+        GPSD_ERR(gpsd->log_lvl, "Failed to set GSA message rate");
         goto close_device;
     }
 
     if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_GNS, UBX_CFG_MSG_ON)) {
-        GPSD_ERR("Failed to set GNS message rate");
+        GPSD_ERR(gpsd->log_lvl, "Failed to set GNS message rate");
         goto close_device;
     }
 
     if (gpsd->socket_enable) {
         /* Set up Unix-domain socket connection */
-        if (socket_server_init(srv)) {
+        if (socket_server_init(srv, gpsd->log_lvl)) {
             exit(0);
         }
 
-        GPSD_INFO("Socket setup is successful");
+        GPSD_INFO(gpsd->log_lvl, "Socket setup is successful");
     }
 
     /* Stop the program by CTRL+C */
@@ -132,15 +139,15 @@ int main(int argc, char **argv)
         sleep(1);
 
         if (device_read(gps_dev)) {
-            GPSD_ERR("Failed to read GPS device");
+            GPSD_ERR(gpsd->log_lvl, "Failed to read GPS device");
         }
 
         if (device_parse(gps_dev)) {
-            GPSD_ERR("Failed to parse GPS message");
+            GPSD_ERR(gpsd->log_lvl, "Failed to parse GPS message");
         }
 
         if (gpsd->show_result) {
-            GPSD_INFO("TOW: %u, Week: %u, Leap sec: %u, Valid: 0x%X, Pos fix mode: %d, Locked sat: %u",
+            GPSD_INFO(gpsd->log_lvl, "TOW: %u, Week: %u, Leap sec: %u, Valid: 0x%X, Pos fix mode: %d, Locked sat: %u",
                         gps_dev->iTOW, gps_dev->week, gps_dev->leap_sec, gps_dev->valid,
                         gps_dev->mode, gps_dev->locked_sat);
         }
@@ -168,7 +175,7 @@ int main(int argc, char **argv)
                     }
 
                     if (socket_write(srv->client[0].fd, msg) <= 0) {
-                        GPSD_ERR("Failed to send to client %d", srv->client[0].fd);
+                        GPSD_ERR(gpsd->log_lvl, "Failed to send to client %d", srv->client[0].fd);
                     }
                 } else if (ret < 0) {
                     /* Client has closed the connection */
