@@ -147,6 +147,7 @@ int ubx_set_msg_rate(int fd, uint8_t class, uint8_t id, uint8_t rate)
     size = write(fd, &ubx_msg, ubx_msg.size);
     if (size < ubx_msg.size) {
         UBX_ERR("[%s] bytes written: %d (%s)\n", __FILE__, size, strerror(errno));
+        return -1;
     }
 
     return wait_for_ack(fd, UBX_CLASS_CFG, UBX_ID_CFG_MSG);

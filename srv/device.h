@@ -11,6 +11,7 @@
 #include <fcntl.h> // open
 #include <sys/types.h> // open
 #include <sys/fcntl.h> 
+#include <pthread.h>
 
 #include "../../ec-platform-sw/linux/drivers/gnss/gnss_ioctl.h" // for ioctl
 
@@ -31,6 +32,8 @@ typedef struct device_info {
     int size; // read size returned by read()
     int offset; // index of UBX-NAV-TIMEGPS
     int log_lvl;
+    pthread_t tid; // thread ID for device_read_thrd()
+    int thrd_stop;
     /* Below are time-related info extracted from the GPS module */
     PosFixMode mode; 
     uint8_t locked_sat; // number of locked satellites

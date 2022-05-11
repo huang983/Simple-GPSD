@@ -1,6 +1,8 @@
 #include "device.h"
 #include "ubx.h"
 
+void *device_read_thrd(void *addr);
+
 /**
  * @brief Initialize GPS device and configure message rate
  * 
@@ -20,13 +22,29 @@ int device_init(DeviceInfo *gps_dev, int log_lvl)
         return -1;
     }
 
-    // if (ioctl(gps_dev->fd, 26368)) {
-    //     DEV_ERR(gps_dev->log_lvl, "Failed to call ioctl!");
-    // }
+    /* Start the thread to read messages from the U-blox */
+    if (pthread_create(&gps_dev->tid, NULL, device_read_thrd, gps_dev)) {
+        DEV_ERR(gps_dev->log_lvl, "Failed to create the reading thread");
+    }
 
     DEV_INFO(gps_dev->log_lvl, "Successfully opened %s", gps_dev->name);
 
     return 0;
+}
+
+void *device_read_thrd(void *addr)
+{
+    DeviceInfo *gps_dev = (DeviceInfo *)addr;
+
+    DEV_INFO(gps_dev->log_lvl, "Starting reading thread %ld", gps_dev->tid);
+    
+    while (!gps_dev->thrd_stop) {
+        /* Reading buffer */
+    }
+
+    DEV_INFO(gps_dev->log_lvl, "Reading thread %ld was stopped!", gps_dev->tid);
+
+    return NULL;
 }
 
 /**
@@ -175,6 +193,12 @@ int device_parse(DeviceInfo *gps_dev)
  */
 int device_close(DeviceInfo *gps_dev)
 {
+    /* Join the thread first */
+    gps_dev->thrd_stop = 1;
+    if (pthread_join(gps_dev->tid, NULL)) {
+        DEV_ERR(gps_dev->log_lvl, "Failed to join the reading thread");
+    }
+
     if (close(gps_dev->fd) < 0) {
         DEV_ERR(gps_dev->log_lvl, "Failed to close %s w/ file descriptor = %d", gps_dev->name, gps_dev->fd);
         return -1;
