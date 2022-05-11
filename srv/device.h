@@ -25,6 +25,15 @@ typedef enum {
     POS_FIX_NUM,
 } PosFixMode;
 
+typedef struct rd_buf_info {
+    int wr_offset;
+    int rd_offset;
+    int invalid_rd;
+    int avail;
+    int size;
+    uint8_t buf[DEV_RD_BUF_SIZE]; // store read system call result here
+} RdBufInfo;
+
 typedef struct device_info {
     int fd; // file descriptor
     char name[64]; // device name
@@ -34,6 +43,7 @@ typedef struct device_info {
     int log_lvl;
     pthread_t tid; // thread ID for device_read_thrd()
     int thrd_stop;
+    RdBufInfo rd_buf;
     /* Below are time-related info extracted from the GPS module */
     PosFixMode mode; 
     uint8_t locked_sat; // number of locked satellites
@@ -73,6 +83,7 @@ typedef struct device_info {
 
 int device_init(DeviceInfo *gps_dev, int log_lvl);
 int device_read(DeviceInfo *gps_dev);
+int device_print(DeviceInfo *gps_dev);
 int device_parse(DeviceInfo *gps_dev);
 int device_close(DeviceInfo *gps_dev);
 

@@ -87,37 +87,6 @@ int main(int argc, char **argv)
     /* Initialize GPS device */
     GPSD_DBG(gpsd->log_lvl, "Device: %s", gps_dev->name);
     if (device_init(gps_dev, gpsd->log_lvl)) {
-        exit(0);
-    }
-
-    /* Poll UBX-NAV-TIMETGPS once per second */
-    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_GSV, UBX_CFG_MSG_OFF)) {
-        GPSD_ERR(gpsd->log_lvl, "Failed to set GSV message rate");
-        goto close_device;
-    }
-
-    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_GLL, UBX_CFG_MSG_OFF)) {
-        GPSD_ERR(gpsd->log_lvl, "Failed to set GLL message rate");
-        goto close_device;
-    }
-
-    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_ZDA, UBX_CFG_MSG_OFF)) {
-        GPSD_ERR(gpsd->log_lvl, "Failed to set ZDA message rate");
-        goto close_device;
-    }
-
-    if (ubx_set_msg_rate(gps_dev->fd, UBX_CLASS_NAV, UBX_ID_NAV_TIMEGPS, UBX_CFG_MSG_ON)) {
-        GPSD_ERR(gpsd->log_lvl, "Failed to set UBX-NAV-TIMETGPS message rate");
-        goto close_device;
-    }
-
-    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_GSA, UBX_CFG_MSG_ON)) {
-        GPSD_ERR(gpsd->log_lvl, "Failed to set GSA message rate");
-        goto close_device;
-    }
-
-    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_GNS, UBX_CFG_MSG_ON)) {
-        GPSD_ERR(gpsd->log_lvl, "Failed to set GNS message rate");
         goto close_device;
     }
 
@@ -136,21 +105,22 @@ int main(int argc, char **argv)
     /* Start here */
     while (!gpsd->stop) {
         /* TODO: wait for PPS interrupt first */
-        sleep(1);
+        usleep(500000);
+        // sleep(1);
+        device_print(gps_dev);
+        // if (device_read(gps_dev)) {
+        //     GPSD_ERR(gpsd->log_lvl, "Failed to read GPS device");
+        // }
 
-        if (device_read(gps_dev)) {
-            GPSD_ERR(gpsd->log_lvl, "Failed to read GPS device");
-        }
+        // if (device_parse(gps_dev)) {
+        //     GPSD_ERR(gpsd->log_lvl, "Failed to parse GPS message");
+        // }
 
-        if (device_parse(gps_dev)) {
-            GPSD_ERR(gpsd->log_lvl, "Failed to parse GPS message");
-        }
-
-        if (gpsd->show_result) {
-            GPSD_INFO(gpsd->log_lvl, "TOW: %u, Week: %u, Leap sec: %u, Valid: 0x%X, Pos fix mode: %d, Locked sat: %u",
-                        gps_dev->iTOW, gps_dev->week, gps_dev->leap_sec, gps_dev->valid,
-                        gps_dev->mode, gps_dev->locked_sat);
-        }
+        // if (gpsd->show_result) {
+        //     GPSD_INFO(gpsd->log_lvl, "TOW: %u, Week: %u, Leap sec: %u, Valid: 0x%X, Pos fix mode: %d, Locked sat: %u",
+        //                 gps_dev->iTOW, gps_dev->week, gps_dev->leap_sec, gps_dev->valid,
+        //                 gps_dev->mode, gps_dev->locked_sat);
+        // }
 
         if (gpsd->socket_enable) {
             if (srv->client[0].fd == -1) {

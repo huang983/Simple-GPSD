@@ -22,9 +22,42 @@ int device_init(DeviceInfo *gps_dev, int log_lvl)
         return -1;
     }
 
+    /* Poll UBX-NAV-TIMETGPS once per second */
+    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_GSV, UBX_CFG_MSG_OFF)) {
+        DEV_ERR(gps_dev->log_lvl, "Failed to set GSV message rate");
+        return -1;
+    }
+
+    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_GLL, UBX_CFG_MSG_OFF)) {
+        DEV_ERR(gps_dev->log_lvl, "Failed to set GLL message rate");
+        return -1;
+    }
+
+    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_ZDA, UBX_CFG_MSG_OFF)) {
+        DEV_ERR(gps_dev->log_lvl, "Failed to set ZDA message rate");
+        return -1;
+    }
+
+    if (ubx_set_msg_rate(gps_dev->fd, UBX_CLASS_NAV, UBX_ID_NAV_TIMEGPS, UBX_CFG_MSG_ON)) {
+        DEV_ERR(gps_dev->log_lvl, "Failed to set UBX-NAV-TIMETGPS message rate");
+        return -1;
+    }
+
+    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_GSA, UBX_CFG_MSG_ON)) {
+        DEV_ERR(gps_dev->log_lvl, "Failed to set GSA message rate");
+        return -1;
+    }
+
+    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_GNS, UBX_CFG_MSG_ON)) {
+        DEV_ERR(gps_dev->log_lvl, "Failed to set GNS message rate");
+        return -1;
+    }
+
     /* Start the thread to read messages from the U-blox */
+    gps_dev->rd_buf.avail = DEV_RD_BUF_SIZE;
     if (pthread_create(&gps_dev->tid, NULL, device_read_thrd, gps_dev)) {
         DEV_ERR(gps_dev->log_lvl, "Failed to create the reading thread");
+        return -1;
     }
 
     DEV_INFO(gps_dev->log_lvl, "Successfully opened %s", gps_dev->name);
@@ -34,12 +67,80 @@ int device_init(DeviceInfo *gps_dev, int log_lvl)
 
 void *device_read_thrd(void *addr)
 {
+#define DEV_MAX_POLL_RETRY 5
     DeviceInfo *gps_dev = (DeviceInfo *)addr;
+    RdBufInfo *rd_buf = &gps_dev->rd_buf;
+    struct pollfd fds;
+    int retry_poll = 0;
+    int ret = 0;
 
     DEV_INFO(gps_dev->log_lvl, "Starting reading thread %ld", gps_dev->tid);
     
+    /* Init poll info */
+    memset(&fds, 0, sizeof(fds));
+    fds.fd = gps_dev->fd;
+    fds.events = POLLIN;
+
+    /* Set invalid_rd in the beginning since no data yet */
+    rd_buf->invalid_rd = 1;
+
     while (!gps_dev->thrd_stop) {
+        /* Poll first */
+gps_poll:
+        ret = poll(&fds, 1, 1000);
+        if (ret == 0) {
+            /* timeout occurred */
+            DEV_ERR(gps_dev->log_lvl, "Poll timeout occurred!");
+            if (retry_poll < DEV_MAX_POLL_RETRY) {
+                retry_poll++;
+                goto gps_poll;
+            } else {
+                DEV_ERR(gps_dev->log_lvl, "Poll max retry time %d reached. Terminating the thread!",
+                        DEV_MAX_POLL_RETRY);
+                pthread_exit(NULL);
+            }
+        } else if (ret < 0) {
+            /* Error occurred */
+            DEV_ERR(gps_dev->log_lvl, "Polling failed!");
+            pthread_exit(NULL);
+        } else {
+            /* Normal case */
+            retry_poll = 0;
+        }
+
         /* Reading buffer */
+        if ((rd_buf->size = read(gps_dev->fd, rd_buf->buf + rd_buf->wr_offset, rd_buf->avail))
+            < 0) {
+            DEV_ERR(gps_dev->log_lvl, "Failed to read %s (size: %d)", gps_dev->name, gps_dev->size);
+            return NULL;
+        }
+
+        if (rd_buf->size == 0) {
+            DEV_INFO(gps_dev->log_lvl, "Nothing was read!");
+            continue;
+        }
+
+        rd_buf->wr_offset += rd_buf->size;
+        if (rd_buf->wr_offset > rd_buf->rd_offset) {
+            rd_buf->avail = DEV_RD_BUF_SIZE - rd_buf->wr_offset;
+            rd_buf->invalid_rd = 0;
+        } else if (rd_buf->wr_offset < rd_buf->rd_offset) {
+            rd_buf->avail = rd_buf->rd_offset - rd_buf->wr_offset - 1;
+
+            if (rd_buf->avail == 0) {
+                /* Set read to invalid and reset read and write offset */
+                rd_buf->invalid_rd = 1;
+                rd_buf->wr_offset = rd_buf->rd_offset;
+                rd_buf->avail = DEV_RD_BUF_SIZE - rd_buf->wr_offset;
+                DEV_INFO(gps_dev->log_lvl, "Invalidate read");
+            }
+        }
+        
+        /* Check if buffer is full */
+        if (rd_buf->avail == 0) {
+            rd_buf->wr_offset = 0;
+            rd_buf->avail = DEV_RD_BUF_SIZE;
+        }
     }
 
     DEV_INFO(gps_dev->log_lvl, "Reading thread %ld was stopped!", gps_dev->tid);
@@ -72,6 +173,26 @@ int device_read(DeviceInfo *gps_dev)
     return 0;
 }
 
+int device_print(DeviceInfo *gps_dev)
+{
+    RdBufInfo *rd_buf = &gps_dev->rd_buf;
+
+    /* wait till read is valid */
+    while (rd_buf->invalid_rd && !gps_dev->thrd_stop) {
+        DEV_ERR(gps_dev->log_lvl, "Read is currently not available. Sleep 1 sec");
+        sleep(1);
+    }
+
+    /* Print 128 bytes at a time */
+    printf("%.128s", rd_buf->buf + rd_buf->rd_offset);
+    rd_buf->rd_offset += 128;
+    if (rd_buf->rd_offset == DEV_RD_BUF_SIZE) {
+        rd_buf->rd_offset = 0;
+    }
+
+    return 0;
+}
+
 /**
  * @brief Parse GPS message and fill in time-related info in DeviceInfo
  * 
@@ -80,17 +201,20 @@ int device_read(DeviceInfo *gps_dev)
  */
 int device_parse(DeviceInfo *gps_dev)
 {
+    RdBufInfo *rd_buf = &gps_dev->rd_buf;
     int i = 0;
     int j = 0;
 
-    if (gps_dev->size <= 0) {
-        DEV_ERR(gps_dev->log_lvl, "Size is %d. Nothing to parse!", gps_dev->size);
+    while (rd_buf->invalid_rd) {
+        /* wait till read is valid */
+        sleep(1);
     }
 
     /* Reset locked satellites */
-    i = gps_dev->offset;
     gps_dev->locked_sat = 0;
     DEV_DBG(gps_dev->log_lvl, "Start parsing (size: %d)", gps_dev->size);
+
+    /* Get UBX first */
     while (i < gps_dev->size) {
         if (gps_dev->buf[i] == 0xB5) {
             DEV_DBG(gps_dev->log_lvl, "UBX index: %d", i);
