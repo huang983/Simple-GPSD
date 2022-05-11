@@ -20,6 +20,15 @@ static void usage(void)
   -d       = Set log level - 0: turn off all, 1: info, 2: error, 4: debug\n");
 }
 
+static void report(void)
+{
+    GpsdData *gpsd = &g_gpsd_data;
+    DeviceInfo *gps_dev = &gpsd->gps_dev;
+
+    GPSD_INFO(gpsd->log_lvl, "Inconsistent iTOW count: %u", gps_dev->iTOW_err_cnt);
+    GPSD_INFO(gpsd->log_lvl, "Invalid NAV-TIMEGPS count: %u", gps_dev->invalid_timegps_cnt);
+}
+
 static int parse_args(int argc, char **argv)
 {
     GpsdData *gpsd = &g_gpsd_data;
@@ -105,22 +114,22 @@ int main(int argc, char **argv)
     /* Start here */
     while (!gpsd->stop) {
         /* TODO: wait for PPS interrupt first */
-        usleep(500000);
-        // sleep(1);
-        device_print(gps_dev);
+        // usleep(500000);
+        sleep(1);
+        // device_print(gps_dev);
         // if (device_read(gps_dev)) {
         //     GPSD_ERR(gpsd->log_lvl, "Failed to read GPS device");
         // }
 
-        // if (device_parse(gps_dev)) {
-        //     GPSD_ERR(gpsd->log_lvl, "Failed to parse GPS message");
-        // }
+        if (device_parse(gps_dev)) {
+            GPSD_ERR(gpsd->log_lvl, "Failed to parse GPS message");
+        }
 
-        // if (gpsd->show_result) {
-        //     GPSD_INFO(gpsd->log_lvl, "TOW: %u, Week: %u, Leap sec: %u, Valid: 0x%X, Pos fix mode: %d, Locked sat: %u",
-        //                 gps_dev->iTOW, gps_dev->week, gps_dev->leap_sec, gps_dev->valid,
-        //                 gps_dev->mode, gps_dev->locked_sat);
-        // }
+        if (gpsd->show_result) {
+            GPSD_INFO(gpsd->log_lvl, "TOW: %u, Week: %u, Leap sec: %u, Valid: 0x%X, Pos fix mode: %d, Locked sat: %u",
+                        gps_dev->iTOW, gps_dev->week, gps_dev->leap_sec, gps_dev->valid,
+                        gps_dev->mode, gps_dev->locked_sat);
+        }
 
         if (gpsd->socket_enable) {
             if (srv->client[0].fd == -1) {
@@ -161,6 +170,8 @@ int main(int argc, char **argv)
 
 close_device:
     device_close(gps_dev);
+
+    report();
 
     return 0;
 }

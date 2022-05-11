@@ -44,6 +44,8 @@ typedef struct device_info {
     pthread_t tid; // thread ID for device_read_thrd()
     int thrd_stop;
     RdBufInfo rd_buf;
+    int iTOW_err_cnt; // # of times (prev iTOW + 1) != curr iTOW
+    int invalid_timegps_cnt; // # of times valid != 0x7
     /* Below are time-related info extracted from the GPS module */
     PosFixMode mode; 
     uint8_t locked_sat; // number of locked satellites

@@ -23,6 +23,7 @@
 #define NMEA_CLASS_OFFSET       3
 
 /* GSA related */
+#define NMEA_GSA_MAX_LEN        128
 #define NMEA_GSA_OP_OFFSET      7
 #define NMEA_GSA_NAV_OFFSET     9
 #define NMEA_GSA_SVID_OFFSET    10
