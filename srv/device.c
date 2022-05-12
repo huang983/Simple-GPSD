@@ -206,6 +206,10 @@ static int wait_for_complete_msg(DeviceInfo *gps_dev, int rd_start, int rd_end)
     while ((rd_start < rd_buf->wr_offset && rd_end >= rd_buf->wr_offset) ||
             (rd_start > rd_buf->wr_offset && rd_end > DEV_RD_BUF_SIZE &&
             (rd_end % DEV_RD_BUF_SIZE) >= rd_buf->wr_offset)) {
+        if (gps_dev->thrd_stop) {
+            break;
+        }
+
         usleep(300000);
     }
 
@@ -221,34 +225,21 @@ static int wait_for_complete_msg(DeviceInfo *gps_dev, int rd_start, int rd_end)
                                             field; \
                                           })
 
-/**
- * @brief Parse GPS message and fill in time-related info in DeviceInfo
- * 
- * @param gps_dev 
- * @return int 
- */
-int device_parse(DeviceInfo *gps_dev)
+int parse_ubx(DeviceInfo *gps_dev)
 {
+    RdBufInfo *rd_buf = &gps_dev->rd_buf;
     static int prev_iTOW = -1;
     static int prev_iTOW_idx = -1;
     int curr_iTOW_idx = -1;
-    RdBufInfo *rd_buf = &gps_dev->rd_buf;
     int i = rd_buf->rd_offset;
     int rd_end = rd_buf->wr_offset;
-    int j = 0;
-
-    DEV_DBG(gps_dev->log_lvl, "read index: %d", i);
 
     /* Wait till read is valid */
     while (rd_buf->invalid_rd) {
-        usleep(500000);
+        usleep(300000);
     }
 
-    /* Reset locked satellites */
-    gps_dev->locked_sat = 0;
-
-find_ubx:
-    /* Get UBX first */
+    /* Find the beginning of UBX message */
     while (i != rd_end) {
         int sync1_idx = (i + DEV_RD_BUF_SIZE - 3) % DEV_RD_BUF_SIZE;
         int sync2_idx = (i + DEV_RD_BUF_SIZE - 2) % DEV_RD_BUF_SIZE;
@@ -257,24 +248,19 @@ find_ubx:
         if (rd_buf->buf[sync1_idx] == UBX_SYNC1 && rd_buf->buf[sync2_idx] == UBX_SYNC2
             && rd_buf->buf[class_idx] == UBX_CLASS_NAV && rd_buf->buf[id_idx] && UBX_ID_NAV_TIMEGPS) {
             // start of UBX
-           i = sync1_idx;
-           break;
+            i = sync1_idx;
+            rd_end = wait_for_complete_msg(gps_dev, i, i + NAV_TIMEGPS_MSG_LEN); // make sure writer gets all the data
+            break;
         }
 
         i = (i + 1) % DEV_RD_BUF_SIZE;
     }
 
-    if (i == rd_end)
+    if (i == rd_end) {
         DEV_INFO(gps_dev->log_lvl, "Couldn't find UBX msg");
-
-    int ubx_end = i + NAV_TIMEGPS_MSG_LEN;
-    if ((i == rd_end) || (i < rd_end && ubx_end >= rd_end)
-        || (i > rd_end && ubx_end > DEV_RD_BUF_SIZE && (ubx_end % DEV_RD_BUF_SIZE) >= rd_end)) {
-        DEV_ERR(gps_dev->log_lvl, "Wait 0.3s for UBX message");
-        usleep(300000);
-        rd_end = rd_buf->wr_offset;
-        goto find_ubx;
+        return -1;
     }
+
 
     // sanity check
     if (rd_buf->buf[(i + UBX_IDX_ClASS) % DEV_RD_BUF_SIZE] == UBX_CLASS_NAV &&
@@ -297,9 +283,9 @@ find_ubx:
         DEV_DBG(gps_dev->log_lvl, "iTOW: %u", gps_dev->iTOW);
 
         /* Validate bits first
-         * bit 0: TOW
-         * bit 1: Week
-         * bit 2: Leap sec */
+        * bit 0: TOW
+        * bit 1: Week
+        * bit 2: Leap sec */
         if (gps_dev->valid != NAV_TIMEGPS_VALID) {
             gps_dev->invalid_timegps_cnt++;
             DEV_ERR(gps_dev->log_lvl, "UBX-NAV-TIMEGPS not valid! (valid: 0x%08X, iTOW: %u, week: %u, leap: %u)",
@@ -311,21 +297,51 @@ find_ubx:
                     i + UBX_IDX_ID, rd_buf->buf[i + UBX_IDX_ID]);
     }
 
-    /* Parse the GSA and GSV msg */
-    char nmea_id[2];
-    char nmea_class[3];
+    if (prev_iTOW != -1 && (prev_iTOW + 1) != gps_dev->iTOW) {
+        gps_dev->iTOW_err_cnt++;
+        DEV_ERR(gps_dev->log_lvl, "Time inconsistent! (prev @ %d: %u, curr @ %d: %u)", prev_iTOW_idx, prev_iTOW,
+                                                                                    curr_iTOW_idx, gps_dev->iTOW);
+    }
+
+    prev_iTOW = gps_dev->iTOW;
+    prev_iTOW_idx = curr_iTOW_idx;
+    rd_buf->rd_offset = (i + NAV_TIMEGPS_MSG_LEN) % DEV_RD_BUF_SIZE;
+
+    return 0;
+}
+
+int parse_nmea(DeviceInfo *gps_dev)
+{
+    RdBufInfo *rd_buf = &gps_dev->rd_buf;
+    char nmea_id[3];
+    char nmea_class[4];
     int gsa_parsed = 0;
     int gsv_parsed = 0;
+    int rd_end = rd_buf->wr_offset;
+    int i = rd_buf->rd_offset;
+    int j = 0;
+
+    /* Wait till read is valid */
+    while (rd_buf->invalid_rd) {
+        usleep(300000);
+    }
+
+    /* Reset locked satellites */
+    gps_dev->locked_sat = 0;
+    
+    /* Parse the GSA and GSV msg */
     DEV_DBG(gps_dev->log_lvl, "i: %d, rd_end: %d", i, rd_end);
     while (i != rd_end) {
         if (rd_buf->buf[i] == '$') {
-            rd_end = wait_for_complete_msg(gps_dev, i, i + NMEA_MSG_LEN); // make sure writer all the data
+            rd_end = wait_for_complete_msg(gps_dev, i, i + NMEA_MSG_LEN); // make sure writer gets all the data
             nmea_id[0] = (char)rd_buf->buf[(i + 1) % DEV_RD_BUF_SIZE];
             nmea_id[1] = (char)rd_buf->buf[(i + 2) % DEV_RD_BUF_SIZE];
+            nmea_id[2] = 0;
             nmea_class[0] = (char)rd_buf->buf[(i + 3) % DEV_RD_BUF_SIZE];
             nmea_class[1] = (char)rd_buf->buf[(i + 4) % DEV_RD_BUF_SIZE];
             nmea_class[2] = (char)rd_buf->buf[(i + 5) % DEV_RD_BUF_SIZE];
-            DEV_DBG(gps_dev->log_lvl, "NMEA class: %s", nmea_class);
+            nmea_class[3] = 0;
+            DEV_DBG(gps_dev->log_lvl, "NMEA class: %s, NMEA id: %s", nmea_class, nmea_id);
             
             if (strncmp(nmea_class, "GSA", 3) == 0) {                
                 /* Get operation mode */
@@ -369,8 +385,10 @@ find_ubx:
                 } else  {
                     if (strcmp(nmea_id, "GP") == 0) {
                         gps_dev->gps_sat_in_view = atoi(numSV_str);
+                        DEV_DBG(gps_dev->log_lvl, "gps_sat_in_view: %d", gps_dev->gps_sat_in_view);
                     } else if (strcmp(nmea_id, "GL") == 0) {
                         gps_dev->gln_sat_in_view = atoi(numSV_str);
+                        DEV_DBG(gps_dev->log_lvl, "gln_sat_in_view: %d", gps_dev->gln_sat_in_view);
                     } else if (strcmp(nmea_id, "GA") == 0) {
                         gps_dev->gal_sat_in_view = atoi(numSV_str);
                     } else if (strcmp(nmea_id, "GB") == 0) {
@@ -396,14 +414,22 @@ find_ubx:
     DEV_DBG(gps_dev->log_lvl, "i: %d, j: %d", i, j);
     rd_buf->rd_offset = i;
 
-    if (prev_iTOW != -1 && (prev_iTOW + 1) != gps_dev->iTOW) {
-        gps_dev->iTOW_err_cnt++;
-        DEV_ERR(gps_dev->log_lvl, "Time inconsistent! (prev @ %d: %u, curr @ %d: %u)", prev_iTOW_idx, prev_iTOW,
-                                                                                       curr_iTOW_idx, gps_dev->iTOW);
-    }
+    return 0;
+}
 
-    prev_iTOW = gps_dev->iTOW;
-    prev_iTOW_idx = curr_iTOW_idx;
+/**
+ * @brief Parse GPS message and fill in time-related info in DeviceInfo
+ * 
+ * @param gps_dev 
+ * @return int 
+ */
+int device_parse(DeviceInfo *gps_dev)
+{
+    /* Get UBX first */
+    while (parse_ubx(gps_dev));
+
+    /* Get NMEA */
+    while (parse_nmea(gps_dev));
 
     return 0;
 }
