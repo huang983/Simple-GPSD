@@ -22,51 +22,19 @@ int device_init(DeviceInfo *gps_dev, int log_lvl)
         return -1;
     }
 
-    /* Poll UBX-NAV-TIMETGPS once per second */
-    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_GSV, (gps_dev->sat_in_view_enable) ?
-                                                                    UBX_CFG_MSG_ON : UBX_CFG_MSG_OFF)) {
-        DEV_ERR(gps_dev->log_lvl, "Failed to set GSV message rate");
-        return -1;
-    }
+    DEV_INFO(gps_dev->log_lvl, "Successfully opened %s", gps_dev->name);
 
-    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_VTG, UBX_CFG_MSG_OFF)) {
-        DEV_ERR(gps_dev->log_lvl, "Failed to set VTG message rate");
-        return -1;
-    }
-    
-    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_GLL, UBX_CFG_MSG_OFF)) {
-        DEV_ERR(gps_dev->log_lvl, "Failed to set GLL message rate");
-        return -1;
-    }
+    return 0;
+}
 
-    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_ZDA, UBX_CFG_MSG_OFF)) {
-        DEV_ERR(gps_dev->log_lvl, "Failed to set ZDA message rate");
-        return -1;
-    }
-
-    if (ubx_set_msg_rate(gps_dev->fd, UBX_CLASS_NAV, UBX_ID_NAV_TIMEGPS, UBX_CFG_MSG_ON)) {
-        DEV_ERR(gps_dev->log_lvl, "Failed to set UBX-NAV-TIMETGPS message rate");
-        return -1;
-    }
-
-    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_GSA, UBX_CFG_MSG_ON)) {
-        DEV_ERR(gps_dev->log_lvl, "Failed to set GSA message rate");
-        return -1;
-    }
-
-    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_GNS, UBX_CFG_MSG_ON)) {
-        DEV_ERR(gps_dev->log_lvl, "Failed to set GNS message rate");
-        return -1;
-    }
-
+int device_start_read_thrd(DeviceInfo *gps_dev)
+{
     /* Start the thread to read messages from the U-blox */
     gps_dev->rd_buf.avail = DEV_RD_BUF_SIZE;
     if (pthread_create(&gps_dev->tid, NULL, device_read_thrd, gps_dev)) {
         DEV_ERR(gps_dev->log_lvl, "Failed to create the reading thread");
         return -1;
     }
-
-    DEV_INFO(gps_dev->log_lvl, "Successfully opened %s", gps_dev->name);
 
     return 0;
 }

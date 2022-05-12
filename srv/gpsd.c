@@ -82,6 +82,51 @@ static int parse_args(int argc, char **argv)
     return 0;
 }
 
+int config_msg_rate(void)
+{
+    GpsdData *gpsd = &g_gpsd_data;
+    DeviceInfo *gps_dev = &gpsd->gps_dev;
+
+    /* Poll UBX-NAV-TIMETGPS once per second */
+    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_VTG, UBX_CFG_MSG_OFF)) {
+        DEV_ERR(gps_dev->log_lvl, "Failed to set VTG message rate");
+        return -1;
+    }
+    
+    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_GLL, UBX_CFG_MSG_OFF)) {
+        DEV_ERR(gps_dev->log_lvl, "Failed to set GLL message rate");
+        return -1;
+    }
+
+    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_ZDA, UBX_CFG_MSG_OFF)) {
+        DEV_ERR(gps_dev->log_lvl, "Failed to set ZDA message rate");
+        return -1;
+    }
+
+    if (ubx_set_msg_rate(gps_dev->fd, UBX_CLASS_NAV, UBX_ID_NAV_TIMEGPS, UBX_CFG_MSG_ON)) {
+        DEV_ERR(gps_dev->log_lvl, "Failed to set UBX-NAV-TIMETGPS message rate");
+        return -1;
+    }
+
+    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_GSA, UBX_CFG_MSG_ON)) {
+        DEV_ERR(gps_dev->log_lvl, "Failed to set GSA message rate");
+        return -1;
+    }
+
+    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_GNS, UBX_CFG_MSG_ON)) {
+        DEV_ERR(gps_dev->log_lvl, "Failed to set GNS message rate");
+        return -1;
+    }
+
+    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_GSV, (gps_dev->sat_in_view_enable) ?
+                                                                    UBX_CFG_MSG_ON : UBX_CFG_MSG_OFF)) {
+        DEV_ERR(gps_dev->log_lvl, "Failed to set GSV message rate");
+        return -1;
+    }
+
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     GpsdData *gpsd = &g_gpsd_data;
@@ -101,13 +146,26 @@ int main(int argc, char **argv)
     /* Initialize GPS device */
     GPSD_DBG(gpsd->log_lvl, "Device: %s", gps_dev->name);
     if (device_init(gps_dev, gpsd->log_lvl)) {
-        goto close_device;
+        GPSD_ERR(gpsd->log_lvl, "Failed to open device");
+        exit(0);
+    }
+
+    /* Turn on/off NMEA and UBX messages */
+    if (config_msg_rate()) {
+        goto close_device; // or retry? normally shouldn't fail
+    }
+
+    if (device_start_read_thrd(gps_dev)) {
+        GPSD_ERR(gpsd->log_lvl, "Failed to start reading thread");
+        goto close_device;  // or retry? normally shouldn't fail
     }
 
     if (gpsd->socket_enable) {
         /* Set up Unix-domain socket connection */
         if (socket_server_init(srv, gpsd->log_lvl)) {
-            exit(0);
+            GPSD_ERR(gpsd->log_lvl, "Failed to start server");
+            socket_server_close(srv);
+            gpsd->socket_enable = 0;
         }
 
         GPSD_INFO(gpsd->log_lvl, "Socket setup is successful");
@@ -118,7 +176,7 @@ int main(int argc, char **argv)
 
     /* Start here */
     while (!gpsd->stop) {
-        /* TODO: wait for PPS interrupt first */
+        /* TODO: use ioctl to wait for PPS interrupt */
         sleep(1);
 
         if (device_parse(gps_dev)) {
@@ -149,10 +207,10 @@ int main(int argc, char **argv)
                     /* TODO: parse client's query and send back the corresponding result */
                     char msg[5];
 
-                    if (gps_dev->locked_sat >= 4 &&
+                    if (gps_dev->mode == POS_3D_GNSS_FIX &&
                                 gps_dev->valid & NAV_TIMEGPS_VALID) {
                         sprintf(msg, "%d", GPS_TIME_FIXED);
-                    } else if (gps_dev->locked_sat >= 4) {
+                    } else if (gps_dev->mode == POS_2D_GNSS_FIX) {
                         sprintf(msg, "%d", GPS_POS_FIXED);
                     } else {
                         /* gps_dev->mode == NO_POS_FIX */

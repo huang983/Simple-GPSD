@@ -13,8 +13,6 @@
 #include <sys/fcntl.h> 
 #include <pthread.h>
 
-#include "../../ec-platform-sw/linux/drivers/gnss/gnss_ioctl.h" // for ioctl
-
 extern int errno;
 
 typedef enum {
@@ -92,6 +90,7 @@ typedef struct device_info {
                                 } while (0)
 
 int device_init(DeviceInfo *gps_dev, int log_lvl);
+int device_start_read_thrd(DeviceInfo *gps_dev);
 int device_read(DeviceInfo *gps_dev);
 int device_print(DeviceInfo *gps_dev);
 int device_parse(DeviceInfo *gps_dev);
