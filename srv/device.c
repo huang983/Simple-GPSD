@@ -23,11 +23,17 @@ int device_init(DeviceInfo *gps_dev, int log_lvl)
     }
 
     /* Poll UBX-NAV-TIMETGPS once per second */
-    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_GSV, UBX_CFG_MSG_OFF)) {
+    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_GSV, (gps_dev->sat_in_view_enable) ?
+                                                                    UBX_CFG_MSG_ON : UBX_CFG_MSG_OFF)) {
         DEV_ERR(gps_dev->log_lvl, "Failed to set GSV message rate");
         return -1;
     }
 
+    if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_VTG, UBX_CFG_MSG_OFF)) {
+        DEV_ERR(gps_dev->log_lvl, "Failed to set VTG message rate");
+        return -1;
+    }
+    
     if (ubx_set_msg_rate(gps_dev->fd, NMEA_CLASS_STD, NMEA_ID_GLL, UBX_CFG_MSG_OFF)) {
         DEV_ERR(gps_dev->log_lvl, "Failed to set GLL message rate");
         return -1;
@@ -193,6 +199,28 @@ int device_print(DeviceInfo *gps_dev)
     return 0;
 }
 
+static int wait_for_complete_msg(DeviceInfo *gps_dev, int rd_start, int rd_end)
+{
+    RdBufInfo *rd_buf = &gps_dev->rd_buf;
+
+    while ((rd_start < rd_buf->wr_offset && rd_end >= rd_buf->wr_offset) ||
+            (rd_start > rd_buf->wr_offset && rd_end > DEV_RD_BUF_SIZE &&
+            (rd_end % DEV_RD_BUF_SIZE) >= rd_buf->wr_offset)) {
+        usleep(300000);
+    }
+
+    return rd_buf->wr_offset;
+}
+
+#define extract_field_from_string(str, field_no) ({ \
+                                            char *field = NULL; \
+                                            field = strtok(str, ","); \
+                                            for (int fno = 0; fno < field_no; fno++) { \
+                                                field = strtok(NULL, ","); \
+                                            } \
+                                            field; \
+                                          })
+
 /**
  * @brief Parse GPS message and fill in time-related info in DeviceInfo
  * 
@@ -202,6 +230,8 @@ int device_print(DeviceInfo *gps_dev)
 int device_parse(DeviceInfo *gps_dev)
 {
     static int prev_iTOW = -1;
+    static int prev_iTOW_idx = -1;
+    int curr_iTOW_idx = -1;
     RdBufInfo *rd_buf = &gps_dev->rd_buf;
     int i = rd_buf->rd_offset;
     int rd_end = rd_buf->wr_offset;
@@ -209,27 +239,36 @@ int device_parse(DeviceInfo *gps_dev)
 
     DEV_DBG(gps_dev->log_lvl, "read index: %d", i);
 
+    /* Wait till read is valid */
     while (rd_buf->invalid_rd) {
-        /* wait till read is valid */
         usleep(500000);
     }
 
     /* Reset locked satellites */
     gps_dev->locked_sat = 0;
 
-    /* Get UBX first */
 find_ubx:
+    /* Get UBX first */
     while (i != rd_end) {
-        if (rd_buf->buf[i] == 0xB5) {
+        int sync1_idx = (i + DEV_RD_BUF_SIZE - 3) % DEV_RD_BUF_SIZE;
+        int sync2_idx = (i + DEV_RD_BUF_SIZE - 2) % DEV_RD_BUF_SIZE;
+        int class_idx = (i + DEV_RD_BUF_SIZE - 1) % DEV_RD_BUF_SIZE;
+        int id_idx = i;
+        if (rd_buf->buf[sync1_idx] == UBX_SYNC1 && rd_buf->buf[sync2_idx] == UBX_SYNC2
+            && rd_buf->buf[class_idx] == UBX_CLASS_NAV && rd_buf->buf[id_idx] && UBX_ID_NAV_TIMEGPS) {
             // start of UBX
+           i = sync1_idx;
            break;
         }
 
         i = (i + 1) % DEV_RD_BUF_SIZE;
     }
 
+    if (i == rd_end)
+        DEV_INFO(gps_dev->log_lvl, "Couldn't find UBX msg");
+
     int ubx_end = i + NAV_TIMEGPS_MSG_LEN;
-    if ((i < rd_end && ubx_end >= rd_end)
+    if ((i == rd_end) || (i < rd_end && ubx_end >= rd_end)
         || (i > rd_end && ubx_end > DEV_RD_BUF_SIZE && (ubx_end % DEV_RD_BUF_SIZE) >= rd_end)) {
         DEV_ERR(gps_dev->log_lvl, "Wait 0.3s for UBX message");
         usleep(300000);
@@ -237,12 +276,10 @@ find_ubx:
         goto find_ubx;
     }
 
-    if (rd_buf->buf[i + UBX_IDX_ClASS] == UBX_CLASS_NAV &&
-                rd_buf->buf[i + UBX_IDX_ID] == UBX_ID_NAV_TIMEGPS) {
-                /* Validate bits first
-                 * bit 0: TOW
-                 * bit 1: Week
-                 * bit 2: Leap sec */
+    // sanity check
+    if (rd_buf->buf[(i + UBX_IDX_ClASS) % DEV_RD_BUF_SIZE] == UBX_CLASS_NAV &&
+                rd_buf->buf[(i + UBX_IDX_ID) % DEV_RD_BUF_SIZE] == UBX_ID_NAV_TIMEGPS) {
+        curr_iTOW_idx = (i + NAV_TIMEGPS_iTOW_OFFSET) % DEV_RD_BUF_SIZE;
         gps_dev->iTOW = COMBINE_FOUR_EIGHT_BIT(rd_buf->buf[(i + NAV_TIMEGPS_iTOW_OFFSET + 3) % DEV_RD_BUF_SIZE],
                                                 rd_buf->buf[(i + NAV_TIMEGPS_iTOW_OFFSET + 2) % DEV_RD_BUF_SIZE],
                                                 rd_buf->buf[(i + NAV_TIMEGPS_iTOW_OFFSET + 1) % DEV_RD_BUF_SIZE],
@@ -259,57 +296,97 @@ find_ubx:
         gps_dev->tAcc = rd_buf->buf[(i + NAV_TIMEGPS_tAcc_OFFSET) % DEV_RD_BUF_SIZE];
         DEV_DBG(gps_dev->log_lvl, "iTOW: %u", gps_dev->iTOW);
 
+        /* Validate bits first
+         * bit 0: TOW
+         * bit 1: Week
+         * bit 2: Leap sec */
         if (gps_dev->valid != NAV_TIMEGPS_VALID) {
             gps_dev->invalid_timegps_cnt++;
             DEV_ERR(gps_dev->log_lvl, "UBX-NAV-TIMEGPS not valid! (valid: 0x%08X, iTOW: %u, week: %u, leap: %u)",
                     gps_dev->valid, gps_dev->iTOW, gps_dev->week, gps_dev->leap_sec);
         }
+    } else {
+        DEV_INFO(gps_dev->log_lvl, "Unexpected UBX message - class @ %d: 0x%X, ID @ %d: 0x%X",
+                    i + UBX_IDX_ClASS, rd_buf->buf[i + UBX_IDX_ClASS],
+                    i + UBX_IDX_ID, rd_buf->buf[i + UBX_IDX_ID]);
     }
-    /* Parse the GSA msg */
+
+    /* Parse the GSA and GSV msg */
+    char nmea_id[2];
     char nmea_class[3];
+    int gsa_parsed = 0;
+    int gsv_parsed = 0;
     DEV_DBG(gps_dev->log_lvl, "i: %d, rd_end: %d", i, rd_end);
     while (i != rd_end) {
         if (rd_buf->buf[i] == '$') {
+            rd_end = wait_for_complete_msg(gps_dev, i, i + NMEA_MSG_LEN); // make sure writer all the data
+            nmea_id[0] = (char)rd_buf->buf[(i + 1) % DEV_RD_BUF_SIZE];
+            nmea_id[1] = (char)rd_buf->buf[(i + 2) % DEV_RD_BUF_SIZE];
             nmea_class[0] = (char)rd_buf->buf[(i + 3) % DEV_RD_BUF_SIZE];
             nmea_class[1] = (char)rd_buf->buf[(i + 4) % DEV_RD_BUF_SIZE];
             nmea_class[2] = (char)rd_buf->buf[(i + 5) % DEV_RD_BUF_SIZE];
             DEV_DBG(gps_dev->log_lvl, "NMEA class: %s", nmea_class);
-        }
+            
+            if (strncmp(nmea_class, "GSA", 3) == 0) {                
+                /* Get operation mode */
+                gps_dev->mode = atoi((char *)&rd_buf->buf[i + NMEA_GSA_NAV_OFFSET]);
 
-        if (strncmp(nmea_class, "GSA", 3) == 0) {
-            int nmea_end = i + NMEA_GSA_MAX_LEN;
-check_nmea_end:
-            if ((i < rd_end && nmea_end >= rd_end)
-                || (i > rd_end && nmea_end > DEV_RD_BUF_SIZE &&
-                    (nmea_end % DEV_RD_BUF_SIZE) >= rd_end)) {
-                DEV_ERR(gps_dev->log_lvl, "Wait 0.3s for NMEA GSA message (rd_end: %d, nmea_end: %d)",
-                        rd_end, nmea_end);
-                usleep(300000);
-                rd_end = rd_buf->wr_offset;
-                goto check_nmea_end;
-            }
+                /* Count number of satellites */
+                j = i + NMEA_GSA_SVID_OFFSET;
+                while (gps_dev->locked_sat < NMEA_GSA_MAX_SATELITTES) {
+                    if (rd_buf->buf[j] == ',') {
+                        if (rd_buf->buf[(j + 1) % DEV_RD_BUF_SIZE] == ',') {
+                            /* No more satelittes to read */
+                            break;
+                        }
 
-            /* Get operation mode */
-            gps_dev->mode = atoi((char *)&rd_buf->buf[i + NMEA_GSA_NAV_OFFSET]);
-
-            /* Count number of satellites */
-            j = i + NMEA_GSA_SVID_OFFSET;
-            while (gps_dev->locked_sat < NMEA_GSA_MAX_SATELITTES) {
-                if (rd_buf->buf[j] == ',') {
-                    if (rd_buf->buf[(j + 1) % DEV_RD_BUF_SIZE] == ',') {
-                        /* No more satelittes to read */
-                        break;
+                        gps_dev->locked_sat++;
                     }
 
-                    gps_dev->locked_sat++;
+                    j = (j + 1) % DEV_RD_BUF_SIZE;
                 }
+                gsa_parsed = 1;
+            } else if (strncmp(nmea_class, "GNS", 3) == 0) {
+                DEV_DBG(gps_dev->log_lvl, "%.64s", (char *)&rd_buf->buf[i]);
+            } else if (strncmp(nmea_class, "GSV", 3) == 0) {
+                char gsv_buf[NMEA_GSV_MAX_LEN];
+                int first_cp_sz = (i + NMEA_GSV_MAX_LEN) > DEV_RD_BUF_SIZE ?
+                                (DEV_RD_BUF_SIZE - i) : NMEA_GSV_MAX_LEN;
+                int second_cp_sz = first_cp_sz == NMEA_GSV_MAX_LEN ?
+                                0 : (i + NMEA_GSV_MAX_LEN) % DEV_RD_BUF_SIZE;
+                char *numSV_str = NULL;
+                
+                DEV_DBG(gps_dev->log_lvl, "Parsing GSV");
 
-                j = (j + 1) % DEV_RD_BUF_SIZE;
+                memcpy(gsv_buf, (char *)&rd_buf->buf[i], first_cp_sz);
+                if (second_cp_sz) {
+                    memcpy(gsv_buf + first_cp_sz, (char *)&rd_buf->buf[0], second_cp_sz);
+                }
+                numSV_str = extract_field_from_string(gsv_buf, NMEA_GSV_numSV_FNO);
+                
+                if (numSV_str == NULL) {
+                    DEV_ERR(gps_dev->log_lvl, "Cannot parse satellites in view");
+                } else  {
+                    if (strcmp(nmea_id, "GP") == 0) {
+                        gps_dev->gps_sat_in_view = atoi(numSV_str);
+                    } else if (strcmp(nmea_id, "GL") == 0) {
+                        gps_dev->gln_sat_in_view = atoi(numSV_str);
+                    } else if (strcmp(nmea_id, "GA") == 0) {
+                        gps_dev->gal_sat_in_view = atoi(numSV_str);
+                    } else if (strcmp(nmea_id, "GB") == 0) {
+                        gps_dev->bd_sat_in_view = atoi(numSV_str);
+                    }
+                }
+                
+                i = (i + first_cp_sz + second_cp_sz) % DEV_RD_BUF_SIZE;
+                gsv_parsed = 1;
             }
 
-            break;
-        } else if (strncmp(nmea_class, "GNS", 3) == 0) {
-            DEV_DBG(gps_dev->log_lvl, "%.64s", (char *)&rd_buf->buf[i]);
+            if (gsa_parsed) {
+                if ((gps_dev->sat_in_view_enable && gsv_parsed) || !gps_dev->sat_in_view_enable) {
+                    break;
+                }
+            }
         }
 
         i = (i + 1) % DEV_RD_BUF_SIZE;
@@ -321,10 +398,12 @@ check_nmea_end:
 
     if (prev_iTOW != -1 && (prev_iTOW + 1) != gps_dev->iTOW) {
         gps_dev->iTOW_err_cnt++;
-        DEV_ERR(gps_dev->log_lvl, "Time inconsistent! (prev: %u, curr: %u)", prev_iTOW, gps_dev->iTOW);
+        DEV_ERR(gps_dev->log_lvl, "Time inconsistent! (prev @ %d: %u, curr @ %d: %u)", prev_iTOW_idx, prev_iTOW,
+                                                                                       curr_iTOW_idx, gps_dev->iTOW);
     }
 
     prev_iTOW = gps_dev->iTOW;
+    prev_iTOW_idx = curr_iTOW_idx;
 
     return 0;
 }

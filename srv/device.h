@@ -41,14 +41,20 @@ typedef struct device_info {
     int size; // read size returned by read()
     int offset; // index of UBX-NAV-TIMEGPS
     int log_lvl;
+    int sat_in_view_enable;
     pthread_t tid; // thread ID for device_read_thrd()
     int thrd_stop;
     RdBufInfo rd_buf;
     int iTOW_err_cnt; // # of times (prev iTOW + 1) != curr iTOW
     int invalid_timegps_cnt; // # of times valid != 0x7
+    /* Below are satelittes in-view related info */
+    int gps_sat_in_view;
+    int gln_sat_in_view;
+    int gal_sat_in_view;
+    int bd_sat_in_view;
     /* Below are time-related info extracted from the GPS module */
     PosFixMode mode; 
-    uint8_t locked_sat; // number of locked satellites
+    uint8_t locked_sat; // number of locked satellites for GPS system only (other GNSS systems are not conted here)
     uint32_t iTOW;
     uint32_t fTOW;
     uint32_t week;
@@ -71,7 +77,9 @@ typedef struct device_info {
                                     if (lvl >= DEV_ERR_LVL) { \
                                         printf("[DEV][ERROR][%s][%d] " format, \
                                             __func__, __LINE__, ##__VA_ARGS__); \
-                                        printf(" (err: %s)\n", strerror(errno)); \
+                                        if (errno != 0) \
+                                            printf(" (err: %s)", strerror(errno)); \
+                                        printf("\n"); \
                                     } \
                                 } while(0)
 #define DEV_DBG_LVL 4

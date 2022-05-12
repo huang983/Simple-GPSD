@@ -17,7 +17,8 @@ static void usage(void)
   Options include: \n\
   -s       = Show time and position-fix status \n\
   -u       = Create Unix-domain socket (e.g. -u /tmp/gpsd.sock)\n\
-  -d       = Set log level - 0: turn off all, 1: info, 2: error, 4: debug\n");
+  -d       = Set log level - 0: turn off all, 1: info, 2: error, 4: debug\n\
+  -v       = Enable satelittes in view\n");
 }
 
 static void report(void)
@@ -34,7 +35,7 @@ static int parse_args(int argc, char **argv)
     GpsdData *gpsd = &g_gpsd_data;
     DeviceInfo *gps_dev = &gpsd->gps_dev;
     // ServerSocket *srv = &gpsd->srv;
-    const char *optstr = "su:d:";
+    const char *optstr = "su:d:v";
     int ch;
 
     /* Deault log level to 2 */
@@ -57,6 +58,10 @@ static int parse_args(int argc, char **argv)
             case 'd':
                 gpsd->log_lvl = atoi(optarg);
                 break;
+            case 'v':
+                /* Enable satelittes in view */
+                gps_dev->sat_in_view_enable = 1;
+                break;
             default:
                 usage();
                 break;
@@ -65,8 +70,8 @@ static int parse_args(int argc, char **argv)
 
     /* Get device name */
     if (optind >= argc) {
-        GPSD_ERR(gpsd->log_lvl, "Please provide device path (optind: %d, argc: %d)",
-                    optind, argc);
+        GPSD_ERR(gpsd->log_lvl, "Please provide device path");
+        GPSD_DBG(gpsd->log_lvl, "optind: %d, argc: %d", optind, argc);
         usage();
         return -1;
     }
@@ -114,12 +119,7 @@ int main(int argc, char **argv)
     /* Start here */
     while (!gpsd->stop) {
         /* TODO: wait for PPS interrupt first */
-        // usleep(500000);
         sleep(1);
-        // device_print(gps_dev);
-        // if (device_read(gps_dev)) {
-        //     GPSD_ERR(gpsd->log_lvl, "Failed to read GPS device");
-        // }
 
         if (device_parse(gps_dev)) {
             GPSD_ERR(gpsd->log_lvl, "Failed to parse GPS message");
@@ -129,6 +129,12 @@ int main(int argc, char **argv)
             GPSD_INFO(gpsd->log_lvl, "TOW: %u, Week: %u, Leap sec: %u, Valid: 0x%X, Pos fix mode: %d, Locked sat: %u",
                         gps_dev->iTOW, gps_dev->week, gps_dev->leap_sec, gps_dev->valid,
                         gps_dev->mode, gps_dev->locked_sat);
+        }
+
+        if (gps_dev->sat_in_view_enable) {
+            GPSD_INFO(gpsd->log_lvl, "Satellites in view - GPS: %d, GLONASS: %d, Galileo: %d, Beidou: %d",
+                        gps_dev->gps_sat_in_view, gps_dev->gln_sat_in_view,
+                        gps_dev->gal_sat_in_view, gps_dev->bd_sat_in_view);
         }
 
         if (gpsd->socket_enable) {

@@ -42,7 +42,9 @@ extern int errno;
                                     if (lvl >= GPSD_ERR_LVL) { \
                                         printf("[GPSD][ERROR][%s][%d] " format, \
                                             __func__, __LINE__, ##__VA_ARGS__); \
-                                        printf(" (err: %s)\n", strerror(errno)); \
+                                        if (errno != 0) \
+                                            printf(" (err: %s)", strerror(errno)); \
+                                        printf("\n"); \
                                     } \
                                 } while(0)
 #define GPSD_DBG_LVL 4
