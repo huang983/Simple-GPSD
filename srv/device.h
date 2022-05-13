@@ -11,9 +11,12 @@
 #include <fcntl.h> // open
 #include <sys/types.h> // open
 #include <sys/fcntl.h> 
+#include <sys/ioctl.h>
 #include <pthread.h>
 
 extern int errno;
+
+#define GNSS_IOCTL_WAIT_PPS_IRQ _IO('g', 0)
 
 typedef enum {
     POS_FIX_PAD = 0,
@@ -90,6 +93,7 @@ typedef struct device_info {
                                 } while (0)
 
 int device_init(DeviceInfo *gps_dev, int log_lvl);
+int device_wait_pps(DeviceInfo *gps_dev);
 int device_start_read_thrd(DeviceInfo *gps_dev);
 int device_read(DeviceInfo *gps_dev);
 int device_print(DeviceInfo *gps_dev);

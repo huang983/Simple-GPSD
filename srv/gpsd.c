@@ -15,6 +15,7 @@ static void usage(void)
 {
     printf("usage: gpsd [OPTIONS] device\n\n\
   Options include: \n\
+  -p       = Use ioctl() to wait for PPS \n\
   -s       = Show time and position-fix status \n\
   -u       = Create Unix-domain socket (e.g. -u /tmp/gpsd.sock)\n\
   -d       = Set log level - 0: turn off all, 1: info, 2: error, 4: debug\n\
@@ -35,7 +36,7 @@ static int parse_args(int argc, char **argv)
     GpsdData *gpsd = &g_gpsd_data;
     DeviceInfo *gps_dev = &gpsd->gps_dev;
     // ServerSocket *srv = &gpsd->srv;
-    const char *optstr = "su:d:v";
+    const char *optstr = "su:d:vp";
     int ch;
 
     /* Deault log level to 2 */
@@ -61,6 +62,10 @@ static int parse_args(int argc, char **argv)
             case 'v':
                 /* Enable satelittes in view */
                 gps_dev->sat_in_view_enable = 1;
+                break;
+            case 'p':
+                /* Wait for PPS interrupt */
+                gpsd->wait_pps = 1;
                 break;
             default:
                 usage();
@@ -176,8 +181,12 @@ int main(int argc, char **argv)
 
     /* Start here */
     while (!gpsd->stop) {
-        /* TODO: use ioctl to wait for PPS interrupt */
-        sleep(1);
+        /* Use ioctl to wait for PPS interrupt if set by user */
+        if (gpsd->wait_pps) {
+            device_wait_pps(gps_dev);
+        } else {
+            sleep(1);
+        }
 
         if (device_parse(gps_dev)) {
             GPSD_ERR(gpsd->log_lvl, "Failed to parse GPS message");

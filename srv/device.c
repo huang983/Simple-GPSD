@@ -27,6 +27,17 @@ int device_init(DeviceInfo *gps_dev, int log_lvl)
     return 0;
 }
 
+int device_wait_pps(DeviceInfo *gps_dev)
+{
+    /* blocking call to wait for IRQ */
+    if (ioctl(gps_dev->fd, GNSS_IOCTL_WAIT_PPS_IRQ)) {
+        DEV_ERR(gps_dev->log_lvl, "ioctl() failed");
+        return -1;
+    }
+
+    return 0;
+}
+
 int device_start_read_thrd(DeviceInfo *gps_dev)
 {
     /* Start the thread to read messages from the U-blox */
