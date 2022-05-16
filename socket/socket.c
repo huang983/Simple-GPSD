@@ -64,9 +64,9 @@ int socket_server_init(ServerSocket *srv, int log_lvl)
     }
 
     if (socket_server_try_accept(srv) < 0) {
-        SCKT_INFO(srv_log_lvl, "No client connection yet!");
+        SCKT_DBG(srv_log_lvl, "No client connection yet!");
     } else {
-        SCKT_INFO(srv_log_lvl, "Connection w/ cllient %d established", srv->client[i].fd);
+        SCKT_DBG(srv_log_lvl, "Connection w/ cllient %d established", srv->client[i].fd);
     }
 
     return 0;

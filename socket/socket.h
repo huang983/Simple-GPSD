@@ -19,7 +19,7 @@
 #define SCKT_RET_FAILED         -1
 #define SCKT_MAX_CLIENT         6
 
-#define SCKT_FILE               "/tmp/file.socket"
+#define SCKT_FILE               "/tmp/gpsd.sock"
 
 typedef int socket_t;
 extern int errno;
