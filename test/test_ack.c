@@ -32,11 +32,16 @@ int main(int argc, char **argv)
 
     // open device
     strncpy(gps_dev.name, argv[1], sizeof(gps_dev.name));
-    if (device_init(&gps_dev)) {
+    if (device_init(&gps_dev, 2)) {
         printf("Failed to open device %s", argv[1]);
     }
 
     while (!stop) {
+        if (ubx_set_msg_rate(gps_dev.fd, NMEA_CLASS_STD, NMEA_ID_VTG, UBX_CFG_MSG_OFF)) {
+            printf("Failed to set VTG message rate\n");
+            return -1;
+        }
+
         if (ubx_set_msg_rate(gps_dev.fd, NMEA_CLASS_STD, NMEA_ID_GSV, UBX_CFG_MSG_OFF)) {
             printf("Failed to set GSV message rate\n");
             goto close_device;
