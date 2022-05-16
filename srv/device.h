@@ -1,7 +1,7 @@
 #ifndef DEVICE_H
 #define DEVICE_H
 
-#define DEV_RD_BUF_SIZE 1024
+#define DEV_RD_BUF_SIZE 4096
 
 #include <stdio.h>
 #include <stdlib.h>

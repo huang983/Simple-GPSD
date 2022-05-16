@@ -141,8 +141,8 @@ int ubx_set_msg_rate(int fd, uint8_t class, uint8_t id, uint8_t rate)
     ubx_msg.payload_ck_sum[2] = rate;
 
     check_sum(&ubx_msg);
-    // printf("ck_a: 0x%X, ck_b: 0x%X\n", ubx_msg.payload_ck_sum[ubx_msg.size - 6 - 2],
-    //             ubx_msg.payload_ck_sum[ubx_msg.size - 6 - 1]);
+    UBX_DBG("ck_a: 0x%X, ck_b: 0x%X\n", ubx_msg.payload_ck_sum[ubx_msg.size - 6 - 2],
+                ubx_msg.payload_ck_sum[ubx_msg.size - 6 - 1]);
 
     size = write(fd, &ubx_msg, ubx_msg.size);
     if (size < ubx_msg.size) {
@@ -150,5 +150,8 @@ int ubx_set_msg_rate(int fd, uint8_t class, uint8_t id, uint8_t rate)
         return -1;
     }
 
-    return wait_for_ack(fd, UBX_CLASS_CFG, UBX_ID_CFG_MSG);
+    // TODO: use a better approach to wait for ack
+    // return wait_for_ack(fd, UBX_CLASS_CFG, UBX_ID_CFG_MSG);
+    usleep(300000);
+    return 0;
 }

@@ -173,7 +173,7 @@ int main(int argc, char **argv)
             gpsd->socket_enable = 0;
         }
 
-        GPSD_INFO(gpsd->log_lvl, "Socket setup is successful");
+        GPSD_DBG(gpsd->log_lvl, "Socket setup is successful");
     }
 
     /* Stop the program by CTRL+C */
@@ -190,6 +190,7 @@ int main(int argc, char **argv)
 
         if (device_parse(gps_dev)) {
             GPSD_ERR(gpsd->log_lvl, "Failed to parse GPS message");
+            continue;
         }
 
         if (gpsd->show_result) {

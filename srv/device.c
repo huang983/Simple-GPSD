@@ -59,7 +59,7 @@ void *device_read_thrd(void *addr)
     int retry_poll = 0;
     int ret = 0;
 
-    DEV_INFO(gps_dev->log_lvl, "Starting reading thread %ld", gps_dev->tid);
+    DEV_DBG(gps_dev->log_lvl, "Starting reading thread %ld", gps_dev->tid);
     
     /* Init poll info */
     memset(&fds, 0, sizeof(fds));
@@ -128,7 +128,7 @@ gps_poll:
         }
     }
 
-    DEV_INFO(gps_dev->log_lvl, "Reading thread %ld was stopped!", gps_dev->tid);
+    DEV_DBG(gps_dev->log_lvl, "Reading thread %ld was stopped!", gps_dev->tid);
 
     return NULL;
 }
@@ -236,7 +236,7 @@ int parse_ubx(DeviceInfo *gps_dev)
     }
 
     if (i == rd_end) {
-        DEV_INFO(gps_dev->log_lvl, "Couldn't find UBX msg");
+        DEV_DBG(gps_dev->log_lvl, "Couldn't find UBX msg");
         return -1;
     }
 
@@ -404,11 +404,39 @@ int parse_nmea(DeviceInfo *gps_dev)
  */
 int device_parse(DeviceInfo *gps_dev)
 {
+#define DEV_MAX_PARSE_RETRY 10
+    int retry = 0;
+
     /* Get UBX first */
-    while (parse_ubx(gps_dev));
+    while (parse_ubx(gps_dev)) {
+        if (gps_dev->thrd_stop) {
+            return 0;
+        }
+
+        if (retry >= DEV_MAX_PARSE_RETRY) {
+            DEV_ERR(gps_dev->log_lvl, "Failed to find ubx message");
+            return -1;
+        }
+
+        retry++;
+        usleep(300000);
+    }
 
     /* Get NMEA */
-    while (parse_nmea(gps_dev));
+    retry = 0;
+    while (parse_nmea(gps_dev)) {
+        if (gps_dev->thrd_stop) {
+            return 0;
+        }
+
+         if (retry >= DEV_MAX_PARSE_RETRY) {
+            DEV_ERR(gps_dev->log_lvl, "Failed to find ubx message");
+            return -1;
+        }
+
+        retry++;
+        usleep(300000);
+    }
 
     return 0;
 }
